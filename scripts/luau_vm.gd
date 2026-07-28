@@ -14,7 +14,7 @@ var global_variables: Dictionary = {}
 
 class RobloxInstance:
 	var name: String = "Instance"
-	var class_name: String = "Folder"
+	var instance_class_name: String = "Folder"
 	var parent: RobloxInstance = null
 	var children: Array[RobloxInstance] = []
 	var node3d: Node3D = null
@@ -22,7 +22,7 @@ class RobloxInstance:
 	var signals: Dictionary = {}
 
 	func _init(p_class: String = "Folder", p_name: String = "Instance") -> void:
-		class_name = p_class
+		instance_class_name = p_class
 		name = p_name
 
 	func AddChild(child: RobloxInstance) -> void:
@@ -145,7 +145,7 @@ func _brickcolor_new(val: Variant) -> Color: return BrickColorDB.get_color(int(v
 func _brickcolor_random() -> Color: return Color(randf(), randf(), randf())
 
 # Instance.new Constructor
-func _instance_new(class_type: String, parent_obj: Variant = null) -> RobloxInstance:
+func _instance_new(class_type: String, _parent_obj: Variant = null) -> RobloxInstance:
 	var inst: RobloxInstance = RobloxInstance.new(class_type, class_type)
 	print("[LuauVM] Instance.new('%s') created!" % class_type)
 	return inst
@@ -204,7 +204,7 @@ func _execute_line(line: String, env: Dictionary, target_instance: Node3D) -> vo
 			var rhs: Variant = _evaluate_expression(parts[1].strip_edges(), env)
 			_set_property_by_path(lhs, rhs, env)
 
-func _bind_event(event_name: String, target_instance: Node3D, env: Dictionary) -> void:
+func _bind_event(event_name: String, target_instance: Node3D, _env: Dictionary) -> void:
 	if not target_instance: return
 
 	match event_name:
@@ -230,7 +230,7 @@ func _attach_touch_trigger(target_instance: Node3D) -> void:
 		print("[LuauVM] Touched event fired on %s by %s" % [target_instance.name, body.name])
 	)
 
-func _evaluate_expression(expr: String, env: Dictionary) -> Variant:
+func _evaluate_expression(expr: String, _env: Dictionary) -> Variant:
 	expr = expr.strip_edges()
 	if (expr.begins_with('"') and expr.ends_with('"')) or (expr.begins_with("'") and expr.ends_with("'")):
 		return expr.substr(1, expr.length() - 2)
@@ -244,5 +244,5 @@ func _evaluate_expression(expr: String, env: Dictionary) -> Variant:
 		return false
 	return expr
 
-func _set_property_by_path(path: String, value: Variant, env: Dictionary) -> void:
+func _set_property_by_path(path: String, value: Variant, _env: Dictionary) -> void:
 	print("[LuauVM] Set property: %s = %s" % [path, str(value)])
