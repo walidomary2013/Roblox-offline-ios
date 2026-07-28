@@ -63,15 +63,20 @@ jobs:
         run: |
           ~/godot/Godot.app/Contents/MacOS/Godot --headless --export-release "iOS" build/ios/RobloxViewer.xcodeproj
 
-      - name: Inject JIT Entitlements into Xcode Project
+      - name: Inject JIT Entitlements & Disable Code Signing in Xcode Project
         run: |
           cp Entitlements.plist build/ios/Entitlements.plist
           
-          # Patch project.pbxproj to ensure CODE_SIGN_ENTITLEMENTS points to Entitlements.plist
           PBXPROJ="build/ios/RobloxViewer.xcodeproj/project.pbxproj"
           if [ -f "$PBXPROJ" ]; then
+            echo "Patching Xcode project settings for unsigned build with JIT entitlements..."
+            sed -i '' 's/CODE_SIGN_STYLE = Automatic;/CODE_SIGN_STYLE = Manual;/g' "$PBXPROJ"
+            sed -i '' 's/CODE_SIGN_IDENTITY = "iPhone Distribution";/CODE_SIGN_IDENTITY = "";/g' "$PBXPROJ"
+            sed -i '' 's/CODE_SIGN_IDENTITY\[sdk=iphoneos\*\] = "iPhone Distribution";/CODE_SIGN_IDENTITY[sdk=iphoneos*] = "";/g' "$PBXPROJ"
+            sed -i '' 's/CODE_SIGN_IDENTITY\[sdk=iphoneos\*\] = "iPhone Developer";/CODE_SIGN_IDENTITY[sdk=iphoneos*] = "";/g' "$PBXPROJ"
             sed -i '' 's/CODE_SIGN_ENTITLEMENTS = "";/CODE_SIGN_ENTITLEMENTS = Entitlements.plist;/g' "$PBXPROJ"
-            echo "Successfully injected JIT entitlements into Xcode project build settings."
+            sed -i '' 's/PROVISIONING_PROFILE_SPECIFIER = "";/PROVISIONING_PROFILE_SPECIFIER = "";/g' "$PBXPROJ"
+            echo "Successfully patched project.pbxproj."
           fi
 
       - name: Compile Unsigned iOS Binary with xcodebuild
@@ -82,9 +87,12 @@ jobs:
             -scheme RobloxViewer \
             -sdk iphoneos \
             -configuration Release \
-            CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGN_STYLE="Manual" \
+            PROVISIONING_PROFILE_SPECIFIER="" \
+            DEVELOPMENT_TEAM="" \
             BUILD_DIR=../output
 
       - name: Package Unsigned .ipa Artifact (AltStore / SideStore Ready)
