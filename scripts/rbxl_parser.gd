@@ -209,27 +209,30 @@ func _parse_openblox_properties(properties_node: XMLNode, props: Dictionary) -> 
 					props["Size"] = vec
 				elif prop_name in ["Position", "position"]:
 					props["Position"] = vec
-					props["CFrame"] = Transform3D(Basis(), vec)
+					if not props.get("CFrame_from_xml", false):
+						props["CFrame"] = Transform3D(Basis(), vec)
 			"CoordinateFrame", "CFrame":
-				var pos := Vector3.ZERO
-				var r00:=1.0; var r01:=0.0; var r02:=0.0
-				var r10:=0.0; var r11:=1.0; var r12:=0.0
-				var r20:=0.0; var r21:=0.0; var r22:=1.0
-				for sub in prop_node.children:
-					match sub.name:
-						"X": pos.x = sub.content.to_float()
-						"Y": pos.y = sub.content.to_float()
-						"Z": pos.z = sub.content.to_float()
-						"R00": r00 = sub.content.to_float()
-						"R01": r01 = sub.content.to_float()
-						"R02": r02 = sub.content.to_float()
-						"R10": r10 = sub.content.to_float()
-						"R11": r11 = sub.content.to_float()
-						"R12": r12 = sub.content.to_float()
-						"R20": r20 = sub.content.to_float()
-						"R21": r21 = sub.content.to_float()
-						"R22": r22 = sub.content.to_float()
-				props["CFrame"] = CFrameHelper.create_transform(pos.x, pos.y, pos.z, r00, r01, r02, r10, r11, r12, r20, r21, r22)
+				if prop_name in ["CFrame", "cframe", "CoordinateFrame"]:
+					var pos := Vector3.ZERO
+					var r00:=1.0; var r01:=0.0; var r02:=0.0
+					var r10:=0.0; var r11:=1.0; var r12:=0.0
+					var r20:=0.0; var r21:=0.0; var r22:=1.0
+					for sub in prop_node.children:
+						match sub.name:
+							"X": pos.x = sub.content.to_float()
+							"Y": pos.y = sub.content.to_float()
+							"Z": pos.z = sub.content.to_float()
+							"R00": r00 = sub.content.to_float()
+							"R01": r01 = sub.content.to_float()
+							"R02": r02 = sub.content.to_float()
+							"R10": r10 = sub.content.to_float()
+							"R11": r11 = sub.content.to_float()
+							"R12": r12 = sub.content.to_float()
+							"R20": r20 = sub.content.to_float()
+							"R21": r21 = sub.content.to_float()
+							"R22": r22 = sub.content.to_float()
+					props["CFrame"] = CFrameHelper.create_transform(pos.x, pos.y, pos.z, r00, r01, r02, r10, r11, r12, r20, r21, r22)
+					props["CFrame_from_xml"] = true
 			"Color3":
 				var col := Color.GRAY
 				for sub in prop_node.children:
