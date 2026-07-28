@@ -6,6 +6,8 @@ extends RefCounted
 
 signal map_parsed(spawn_points: Array[Vector3], part_count: int)
 
+const RobloxEnvScript = preload("res://scripts/roblox_environment.gd")
+
 var spawn_locations: Array[Vector3] = []
 var part_count: int = 0
 var material_cache: Dictionary = {}
@@ -14,6 +16,12 @@ const VALID_3D_CLASSES: Array[String] = [
 	"Part", "WedgePart", "CornerWedgePart", "MeshPart", 
 	"SpawnLocation", "TrussPart", "Seat", "VehicleSeat", 
 	"UnionOperation", "FlagStand", "Platform"
+]
+
+const IGNORED_STORAGE_SERVICES: Array[String] = [
+	"ServerStorage", "ReplicatedStorage", "StarterPack", 
+	"StarterGui", "Lighting", "ServerScriptService", 
+	"SoundService", "JointsService", "TestService"
 ]
 
 const CFRAME_ROTATION_LOOKUP: Array[Basis] = [
@@ -148,16 +156,9 @@ func parse_rbxl_string(xml_content: String, parent_node: Node3D) -> Array[Vector
 	map_parsed.emit(spawn_locations, part_count)
 	return spawn_locations
 
-const IGNORED_STORAGE_SERVICES: Array[String] = [
-	"ServerStorage", "ReplicatedStorage", "StarterPack", 
-	"StarterGui", "Lighting", "ServerScriptService", 
-	"SoundService", "JointsService", "TestService"
-]
-
 func _openblox_load_item(item_node: XMLNode, parent_3d_node: Node3D) -> void:
 	var item_class: String = item_node.attributes.get("class", "Part")
 	
-	# Skip non-rendered storage services (ServerStorage, ReplicatedStorage, etc.)
 	if item_class in IGNORED_STORAGE_SERVICES:
 		return
 
@@ -180,14 +181,11 @@ func _openblox_load_item(item_node: XMLNode, parent_3d_node: Node3D) -> void:
 			_parse_openblox_properties(child, props)
 			break
 
-const RobloxEnvScript = preload("res://scripts/roblox_environment.gd")
-
 	if item_class == "Lighting":
 		var env_node = RobloxEnvScript.new()
 		env_node.name = "RobloxEnvironment"
 		parent_3d_node.add_child(env_node)
 		env_node.update_lighting_from_properties(props)
-
 
 	if item_class in ["Script", "LocalScript"]:
 		var script_source := ""
@@ -201,14 +199,12 @@ const RobloxEnvScript = preload("res://scripts/roblox_environment.gd")
 			var vm := LuauVM.new(parent_3d_node)
 			vm.run_script(props.get("Name", item_class), script_source, parent_3d_node)
 
-
 	if item_class in VALID_3D_CLASSES:
 		_instantiate_part_node(props, parent_3d_node)
 
 	for child in item_node.children:
 		if child.name == "Item":
 			_openblox_load_item(child, parent_3d_node)
-
 
 func _parse_openblox_properties(properties_node: XMLNode, props: Dictionary) -> void:
 	for prop_node in properties_node.children:
