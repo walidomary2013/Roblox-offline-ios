@@ -31,6 +31,15 @@ func _ready() -> void:
 	novetus = NovetusLauncherScript.new()
 	if novetus.has_signal("client_launched"):
 		novetus.client_launched.connect(_on_novetus_client_launched)
+
+	# Ensure map_root exists
+	if not map_root:
+		if has_node("MapRoot"):
+			map_root = get_node("MapRoot")
+		else:
+			map_root = Node3D.new()
+			map_root.name = "MapRoot"
+			add_child(map_root)
 	
 	if map_option_button:
 		map_option_button.clear()
@@ -60,6 +69,15 @@ func load_map(path: String) -> void:
 	map_path = path
 	if status_label:
 		status_label.text = "Map Loaded: " + path.get_file()
+
+	# Ensure map_root is non-null
+	if not map_root:
+		if has_node("MapRoot"):
+			map_root = get_node("MapRoot")
+		else:
+			map_root = Node3D.new()
+			map_root.name = "MapRoot"
+			add_child(map_root)
 		
 	for child in map_root.get_children():
 		child.queue_free()

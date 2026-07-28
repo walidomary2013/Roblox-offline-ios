@@ -281,8 +281,9 @@ func _instantiate_part_node(props: Dictionary, parent: Node3D) -> Node3D:
 	return instantiated_node
 
 ## Binary Parser Stub
-func parse_rbxl_binary_buffer(buffer: PackedByteArray, parent_node: Node3D) -> Array[Vector3]:
+func parse_rbxl_binary_buffer(_buffer: PackedByteArray, _parent_node: Node3D) -> Array[Vector3]:
 	spawn_locations.clear()
 	part_count = 0
 	material_cache.clear()
 	return spawn_locations
+
