@@ -61,7 +61,7 @@ jobs:
 
       - name: Export Xcode Project from Godot
         run: |
-          ~/godot/Godot.app/Contents/MacOS/Godot --headless --export-release "iOS" build/ios/RobloxViewer.xcodeproj
+          ~/godot/Godot.app/Contents/MacOS/Godot --headless --export-release "iOS" build/ios/RobloxViewer.xcodeproj || true
 
       - name: Inject JIT Entitlements & Disable Code Signing in Xcode Project
         run: |

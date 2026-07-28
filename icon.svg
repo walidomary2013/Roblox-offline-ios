@@ -1,5 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
-  <rect width="512" height="512" rx="110" fill="#1A1F2C"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <!-- Solid background covering entire canvas (100% opaque) -->
+  <rect width="1024" height="1024" fill="#1A1F2C"/>
   <defs>
     <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
       <stop offset="0%" stop-color="#00A2FF"/>
@@ -10,13 +11,13 @@
       <stop offset="100%" stop-color="#D62828"/>
     </linearGradient>
   </defs>
-  <!-- Background Glow Ring -->
-  <circle cx="256" cy="256" r="180" fill="none" stroke="url(#grad)" stroke-width="12" opacity="0.4"/>
+  <!-- Decorative Ring -->
+  <circle cx="512" cy="512" r="360" fill="none" stroke="url(#grad)" stroke-width="24"/>
   
-  <!-- Roblox 2017 Tilted Square/Block icon -->
-  <g transform="translate(256, 256) rotate(-15)">
-    <rect x="-100" y="-100" width="200" height="200" rx="30" fill="url(#blockGrad)" />
+  <!-- Roblox 2017 Tilted Square Block -->
+  <g transform="translate(512, 512) rotate(-15)">
+    <rect x="-200" y="-200" width="400" height="400" rx="60" fill="url(#blockGrad)" />
     <!-- Inner square hole -->
-    <rect x="-35" y="-35" width="70" height="70" rx="10" fill="#1A1F2C" />
+    <rect x="-70" y="-70" width="140" height="140" rx="20" fill="#1A1F2C" />
   </g>
 </svg>
