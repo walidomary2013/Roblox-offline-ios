@@ -17,6 +17,7 @@
 		B10000012B9A1E0000000001 /* NovetusCore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = NovetusCore.swift; path = Sources/NovetusCore.swift; sourceTree = "<group>"; };
 		B10000022B9A1E0000000002 /* NovetusEngineBridge.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; name = NovetusEngineBridge.mm; path = Sources/NovetusEngineBridge.mm; sourceTree = "<group>"; };
 		B10000032B9A1E0000000003 /* ViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ViewController.swift; path = Sources/ViewController.swift; sourceTree = "<group>"; };
+		B10000042B9A1E0000000004 /* Novetus_iOS-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = "Novetus_iOS-Bridging-Header.h"; path = "Sources/Novetus_iOS-Bridging-Header.h"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -36,6 +37,7 @@
 				B10000012B9A1E0000000001 /* NovetusCore.swift */,
 				B10000022B9A1E0000000002 /* NovetusEngineBridge.mm */,
 				B10000032B9A1E0000000003 /* ViewController.swift */,
+				B10000042B9A1E0000000004 /* Novetus_iOS-Bridging-Header.h */,
 				100000002B9A1E0000000000 /* Novetus_iOS.app */,
 			);
 			sourceTree = "<group>";
@@ -114,6 +116,7 @@
 				CODE_SIGN_IDENTITY = "";
 				PRODUCT_BUNDLE_IDENTIFIER = "com.novetus.ios";
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_OBJC_BRIDGING_HEADER = "Sources/Novetus_iOS-Bridging-Header.h";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
@@ -128,6 +131,7 @@
 				CODE_SIGN_IDENTITY = "";
 				PRODUCT_BUNDLE_IDENTIFIER = "com.novetus.ios";
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_OBJC_BRIDGING_HEADER = "Sources/Novetus_iOS-Bridging-Header.h";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
