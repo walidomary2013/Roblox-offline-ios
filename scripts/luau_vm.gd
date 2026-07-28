@@ -51,7 +51,7 @@ func _math_ceil(v: float) -> float: return ceil(v)
 func run_script(script_name: String, source_code: String, target_instance: Node3D = null) -> void:
 	if source_code.strip_edges() == "": return
 
-	var env := global_variables.duplicate(true)
+	var env: Dictionary = global_variables.duplicate(true)
 	env["script"] = {
 		"Name": script_name,
 		"Parent": target_instance if target_instance else map_root_node
@@ -59,19 +59,18 @@ func run_script(script_name: String, source_code: String, target_instance: Node3
 
 	print("[LuauVM] Executing Luau Script: '%s'" % script_name)
 	
-	# Execute lines dynamically
-	var lines := source_code.split("\n")
+	var lines: PackedStringArray = source_code.split("\n")
 	for line in lines:
 		_execute_line(line.strip_edges(), env, target_instance)
 
 func _execute_line(line: String, env: Dictionary, target_instance: Node3D) -> void:
 	if line.begins_with("--") or line == "":
-		return # Comment or empty
+		return
 
 	# 1. Print / Warn / Error Output
 	if line.begins_with("print(") and line.ends_with(")"):
-		var raw_arg := line.substr(6, line.length() - 7).strip_edges()
-		var msg := _evaluate_expression(raw_arg, env)
+		var raw_arg: String = line.substr(6, line.length() - 7).strip_edges()
+		var msg: Variant = _evaluate_expression(raw_arg, env)
 		print("[Luau: %s] %s" % [env.get("script", {}).get("Name", "Script"), msg])
 		print_output.emit(str(msg))
 
@@ -85,10 +84,10 @@ func _execute_line(line: String, env: Dictionary, target_instance: Node3D) -> vo
 
 	# 3. Dynamic Property Assignments (e.g. game.Lighting.Brightness = 1)
 	elif "=" in line and not ("==" in line or "<=" in line or ">=" in line):
-		var parts := line.split("=")
+		var parts: PackedStringArray = line.split("=")
 		if parts.size() == 2:
-			var lhs := parts[0].strip_edges()
-			var rhs := _evaluate_expression(parts[1].strip_edges(), env)
+			var lhs: String = parts[0].strip_edges()
+			var rhs: Variant = _evaluate_expression(parts[1].strip_edges(), env)
 			_set_property_by_path(lhs, rhs, env)
 
 func _bind_event(event_name: String, target_instance: Node3D, env: Dictionary) -> void:
@@ -104,9 +103,9 @@ func _bind_event(event_name: String, target_instance: Node3D, env: Dictionary) -
 			_attach_touch_trigger(target_instance)
 
 func _attach_touch_trigger(target_instance: Node3D) -> void:
-	var area := Area3D.new()
+	var area: Area3D = Area3D.new()
 	area.name = "LuauTouchArea"
-	var col := CollisionShape3D.new()
+	var col: CollisionShape3D = CollisionShape3D.new()
 	col.shape = BoxShape3D.new()
 	area.add_child(col)
 	target_instance.add_child(area)
