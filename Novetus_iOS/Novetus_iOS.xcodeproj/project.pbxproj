@@ -10,6 +10,7 @@
 		A10000012B9A1E0000000001 /* NovetusCore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000012B9A1E0000000001 /* NovetusCore.swift */; };
 		A10000022B9A1E0000000002 /* NovetusEngineBridge.mm in Sources */ = {isa = PBXBuildFile; fileRef = B10000022B9A1E0000000002 /* NovetusEngineBridge.mm */; };
 		A10000032B9A1E0000000003 /* ViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000032B9A1E0000000003 /* ViewController.swift */; };
+		A10000052B9A1E0000000005 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000052B9A1E0000000005 /* AppDelegate.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -18,6 +19,7 @@
 		B10000022B9A1E0000000002 /* NovetusEngineBridge.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; name = NovetusEngineBridge.mm; path = Sources/NovetusEngineBridge.mm; sourceTree = "<group>"; };
 		B10000032B9A1E0000000003 /* ViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ViewController.swift; path = Sources/ViewController.swift; sourceTree = "<group>"; };
 		B10000042B9A1E0000000004 /* Novetus_iOS-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = "Novetus_iOS-Bridging-Header.h"; path = "Sources/Novetus_iOS-Bridging-Header.h"; sourceTree = "<group>"; };
+		B10000052B9A1E0000000005 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppDelegate.swift; path = Sources/AppDelegate.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -34,6 +36,7 @@
 		C10000002B9A1E0000000000 = {
 			isa = PBXGroup;
 			children = (
+				B10000052B9A1E0000000005 /* AppDelegate.swift */,
 				B10000012B9A1E0000000001 /* NovetusCore.swift */,
 				B10000022B9A1E0000000002 /* NovetusEngineBridge.mm */,
 				B10000032B9A1E0000000003 /* ViewController.swift */,
@@ -98,6 +101,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A10000052B9A1E0000000005 /* AppDelegate.swift in Sources */,
 				A10000012B9A1E0000000001 /* NovetusCore.swift in Sources */,
 				A10000022B9A1E0000000002 /* NovetusEngineBridge.mm in Sources */,
 				A10000032B9A1E0000000003 /* ViewController.swift in Sources */,
