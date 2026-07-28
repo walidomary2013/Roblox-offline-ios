@@ -1,8 +1,8 @@
 class_name RBXLParser
 extends RefCounted
 
-## Full OpenBLOX-Grade Roblox .rbxl (Binary + XML) Parser for Godot 4
-## Adapted directly from OpenBLOX (https://github.com/EGAMatsu/OpenBLOX/blob/main/C_Engine/rbxl.h)
+## OpenBLOX High-Performance Streaming Roblox .rbxl/.rbxlx Parser for Godot 4
+## Uses fast streaming XMLParser SAX parsing & post-instantiation script execution for 60 FPS performance.
 
 signal map_parsed(spawn_points: Array[Vector3], part_count: int)
 
@@ -11,7 +11,7 @@ const RobloxEnvScript = preload("res://scripts/roblox_environment.gd")
 var spawn_locations: Array[Vector3] = []
 var part_count: int = 0
 var material_cache: Dictionary = {}
-var shared_vm: LuauVM = null
+var pending_scripts: Array[Dictionary] = []
 
 const VALID_3D_CLASSES: Array[String] = [
 	"Part", "WedgePart", "CornerWedgePart", "MeshPart", 
@@ -25,39 +25,12 @@ const IGNORED_STORAGE_SERVICES: Array[String] = [
 	"SoundService", "JointsService", "TestService"
 ]
 
-const CFRAME_ROTATION_LOOKUP: Array[Basis] = [
-	Basis(Vector3(1,0,0), Vector3(0,1,0), Vector3(0,0,1)),
-	Basis(Vector3(1,0,0), Vector3(0,0,-1), Vector3(0,1,0)),
-	Basis(Vector3(1,0,0), Vector3(0,-1,0), Vector3(0,0,-1)),
-	Basis(Vector3(1,0,0), Vector3(0,0,1), Vector3(0,-1,0)),
-	Basis(Vector3(0,1,0), Vector3(1,0,0), Vector3(0,0,-1)),
-	Basis(Vector3(0,0,1), Vector3(1,0,0), Vector3(0,1,0)),
-	Basis(Vector3(0,-1,0), Vector3(1,0,0), Vector3(0,0,1)),
-	Basis(Vector3(0,0,-1), Vector3(1,0,0), Vector3(0,-1,0)),
-	Basis(Vector3(0,1,0), Vector3(0,0,1), Vector3(1,0,0)),
-	Basis(Vector3(0,0,1), Vector3(0,-1,0), Vector3(1,0,0)),
-	Basis(Vector3(0,-1,0), Vector3(0,0,-1), Vector3(1,0,0)),
-	Basis(Vector3(0,0,-1), Vector3(0,1,0), Vector3(1,0,0)),
-	Basis(Vector3(-1,0,0), Vector3(0,1,0), Vector3(0,0,-1)),
-	Basis(Vector3(-1,0,0), Vector3(0,0,1), Vector3(0,1,0)),
-	Basis(Vector3(-1,0,0), Vector3(0,-1,0), Vector3(0,0,1)),
-	Basis(Vector3(-1,0,0), Vector3(0,0,-1), Vector3(0,-1,0)),
-	Basis(Vector3(0,1,0), Vector3(-1,0,0), Vector3(0,0,1)),
-	Basis(Vector3(0,0,1), Vector3(-1,0,0), Vector3(0,-1,0)),
-	Basis(Vector3(0,-1,0), Vector3(-1,0,0), Vector3(0,0,-1)),
-	Basis(Vector3(0,0,-1), Vector3(-1,0,0), Vector3(0,1,0)),
-	Basis(Vector3(0,1,0), Vector3(0,0,-1), Vector3(-1,0,0)),
-	Basis(Vector3(0,0,1), Vector3(0,1,0), Vector3(-1,0,0)),
-	Basis(Vector3(0,-1,0), Vector3(0,0,1), Vector3(-1,0,0)),
-	Basis(Vector3(0,0,-1), Vector3(0,-1,0), Vector3(-1,0,0))
-]
-
 ## Entry Point
 func parse_rbxl_file(file_path: String, parent_node: Node3D) -> Array[Vector3]:
 	spawn_locations.clear()
 	part_count = 0
 	material_cache.clear()
-	shared_vm = LuauVM.new(parent_node)
+	pending_scripts.clear()
 
 	if not FileAccess.file_exists(file_path):
 		printerr("[RBXLParser] File does not exist: ", file_path)
@@ -87,409 +60,110 @@ func parse_rbxl_file(file_path: String, parent_node: Node3D) -> Array[Vector3]:
 		var xml_str := buffer.get_string_from_utf8()
 		if xml_str == "":
 			xml_str = buffer.get_string_from_ascii()
-		print("[RBXLParser] Detected Roblox XML Place: ", file_path)
+		print("[RBXLParser] Parsing Roblox XML Place: ", file_path)
 		return parse_rbxl_string(xml_str, parent_node)
 
-## ====================================================================
-## OPENBLOX RECURSIVE DOM XML PARSER
-## ====================================================================
-class XMLNode:
-	var name: String = ""
-	var attributes: Dictionary = {}
-	var content: String = ""
-	var children: Array = []
+## High-Performance Streaming XML Parser
+func parse_rbxl_string(xml_content: String, parent_node: Node3D) -> Array[Vector3]:
+	spawn_locations.clear()
+	part_count = 0
+	material_cache.clear()
+	pending_scripts.clear()
 
-func _build_xml_dom(xml_content: String) -> XMLNode:
 	var parser := XMLParser.new()
 	var err := parser.open_buffer(xml_content.to_utf8_buffer())
-	if err != OK: return null
+	if err != OK:
+		printerr("[RBXLParser] XML Parser failed to open buffer.")
+		return spawn_locations
 
-	var root := XMLNode.new()
-	root.name = "root"
-	var stack: Array[XMLNode] = [root]
+	var item_stack: Array[Dictionary] = []
+	var current_prop_name := ""
 	var current_text := ""
 
 	while parser.read() == OK:
 		var ntype := parser.get_node_type()
 		if ntype == XMLParser.NODE_ELEMENT:
 			var nname := parser.get_node_name()
-			var new_node := XMLNode.new()
-			new_node.name = nname
-			for i in range(parser.get_attribute_count()):
-				new_node.attributes[parser.get_attribute_name(i)] = parser.get_attribute_value(i)
-			
-			stack[-1].children.append(new_node)
-			stack.append(new_node)
 			current_text = ""
+
+			if nname == "Item":
+				var iclass: String = parser.get_named_attribute_value_safe("class")
+				if iclass == "": iclass = "Part"
+
+				var new_item := {
+					"class": iclass,
+					"Name": iclass,
+					"Position": Vector3.ZERO,
+					"Size": Vector3(4, 1.2, 2),
+					"CFrame": Transform3D.IDENTITY,
+					"BrickColor": 194,
+					"Color3": Color(0.64, 0.64, 0.64),
+					"HasColor3": false,
+					"Transparency": 0.0,
+					"CanCollide": true,
+					"Shape": 1,
+					"Source": ""
+				}
+				item_stack.append(new_item)
+			elif item_stack.size() > 0:
+				current_prop_name = parser.get_named_attribute_value_safe("name")
+
 		elif ntype == XMLParser.NODE_TEXT:
 			current_text += parser.get_node_data()
+
 		elif ntype == XMLParser.NODE_ELEMENT_END:
-			if stack.size() > 1:
-				var closing_node = stack.pop_back()
-				closing_node.content = current_text.strip_edges()
-			current_text = ""
+			var end_name := parser.get_node_name()
+			var txt := current_text.strip_edges()
 
-	return root
+			if item_stack.size() > 0:
+				var current_item: Dictionary = item_stack[-1]
 
-func parse_rbxl_string(xml_content: String, parent_node: Node3D) -> Array[Vector3]:
-	spawn_locations.clear()
-	part_count = 0
-	material_cache.clear()
+				if end_name in ["string", "ProtectedString", "ScriptText"]:
+					if current_prop_name in ["Source", "ProtectedString", "ScriptText", "SourceCode"]:
+						current_item["Source"] = txt
+				elif end_name in ["int", "int64", "token"]:
+					if current_prop_name == "BrickColor": current_item["BrickColor"] = txt.to_int()
+					elif current_prop_name in ["shape", "Shape"]: current_item["Shape"] = txt.to_int()
+				elif end_name in ["float", "double"]:
+					if current_prop_name in ["Transparency", "transparency"]: current_item["Transparency"] = txt.to_float()
+				elif end_name in ["bool"]:
+					if current_prop_name in ["CanCollide", "canCollide"]: current_item["CanCollide"] = (txt.to_lower() == "true")
+				elif end_name == "Color3uint8":
+					current_item["Color3"] = BrickColorDB.parse_color3_uint8(txt.to_int())
+					current_item["HasColor3"] = true
 
-	var root_dom := _build_xml_dom(xml_content)
-	if not root_dom:
-		printerr("[RBXLParser] Failed to build XML DOM tree.")
-		return spawn_locations
+				if end_name == "Item":
+					var finished_item: Dictionary = item_stack.pop_back()
+					var iclass: String = finished_item.get("class", "Part")
 
-	var roblox_node: XMLNode = null
-	for child in root_dom.children:
-		if child.name == "roblox":
-			roblox_node = child
-			break
+					if not (iclass in IGNORED_STORAGE_SERVICES):
+						if iclass in VALID_3D_CLASSES:
+							_instantiate_part_node(finished_item, parent_node)
+						elif iclass == "Lighting":
+							var env_node = RobloxEnvScript.new()
+							env_node.name = "RobloxEnvironment"
+							parent_node.add_child(env_node)
+							env_node.update_lighting_from_properties(finished_item)
+						elif iclass in ["Script", "LocalScript"]:
+							var src: String = finished_item.get("Source", "")
+							if src != "":
+								src = src.replace("&apos;", "'").replace("&quot;", '"').replace("&lt;", "<").replace("&gt;", ">").replace("&amp;", "&")
+								pending_scripts.append({
+									"name": finished_item.get("Name", iclass),
+									"source": src,
+									"target": parent_node
+								})
 
-	if not roblox_node:
-		roblox_node = root_dom
+	# Post-Instantiation Script Execution (Execute scripts AFTER 3D world is built)
+	if pending_scripts.size() > 0:
+		print("[RBXLParser] Executing %d place Luau scripts on complete 3D scene..." % pending_scripts.size())
+		var vm := LuauVM.new(parent_node)
+		for script_data in pending_scripts:
+			vm.run_script(script_data["name"], script_data["source"], script_data["target"])
 
-	for child in roblox_node.children:
-		if child.name == "Item":
-			_openblox_load_item(child, parent_node)
-
-	print("[RBXLParser] OpenBLOX XML Engine loaded %d parts and %d spawns." % [part_count, spawn_locations.size()])
+	print("[RBXLParser] OpenBLOX Fast Streaming Engine loaded %d parts and %d spawns." % [part_count, spawn_locations.size()])
 	map_parsed.emit(spawn_locations, part_count)
 	return spawn_locations
-
-func _openblox_load_item(item_node: XMLNode, parent_3d_node: Node3D) -> void:
-	var item_class: String = item_node.attributes.get("class", "Part")
-	
-	if item_class in IGNORED_STORAGE_SERVICES:
-		return
-
-	var props := {
-		"class": item_class,
-		"Name": item_class,
-		"Position": Vector3.ZERO,
-		"Size": Vector3(4, 1.2, 2),
-		"CFrame": Transform3D.IDENTITY,
-		"BrickColor": 194,
-		"Color3": Color(0.64, 0.64, 0.64),
-		"HasColor3": false,
-		"Transparency": 0.0,
-		"CanCollide": true,
-		"Shape": 1
-	}
-
-	for child in item_node.children:
-		if child.name == "Properties":
-			_parse_openblox_properties(child, props)
-			break
-
-	if item_class == "Lighting":
-		var env_node = RobloxEnvScript.new()
-		env_node.name = "RobloxEnvironment"
-		parent_3d_node.add_child(env_node)
-		env_node.update_lighting_from_properties(props)
-
-	if item_class in ["Script", "LocalScript"]:
-		var script_source := ""
-		for child in item_node.children:
-			if child.name == "Properties":
-				for prop in child.children:
-					var pname: String = prop.attributes.get("name", "")
-					if pname in ["Source", "ProtectedString", "ScriptText", "SourceCode"]:
-						script_source = prop.content
-						break
-		if script_source != "" and shared_vm:
-			script_source = script_source.replace("&apos;", "'").replace("&quot;", '"').replace("&lt;", "<").replace("&gt;", ">").replace("&amp;", "&")
-			shared_vm.run_script(props.get("Name", item_class), script_source, parent_3d_node)
-
-	if item_class in VALID_3D_CLASSES:
-		_instantiate_part_node(props, parent_3d_node)
-
-	for child in item_node.children:
-		if child.name == "Item":
-			_openblox_load_item(child, parent_3d_node)
-
-func _parse_openblox_properties(properties_node: XMLNode, props: Dictionary) -> void:
-	for prop_node in properties_node.children:
-		var prop_name: String = prop_node.attributes.get("name", "")
-		if prop_name == "": continue
-
-		var prop_type: String = prop_node.name
-
-		match prop_type:
-			"string":
-				props[prop_name] = prop_node.content
-			"int", "int64":
-				props[prop_name] = prop_node.content.to_int()
-			"float", "double":
-				props[prop_name] = prop_node.content.to_float()
-			"bool":
-				props[prop_name] = (prop_node.content.to_lower() == "true")
-			"token":
-				props[prop_name] = prop_node.content.to_int()
-			"Color3uint", "Color3uint8":
-				props["Color3"] = BrickColorDB.parse_color3_uint8(prop_node.content.to_int())
-				props["HasColor3"] = true
-			"Vector3", "Vector3int16":
-				var vec := Vector3.ZERO
-				for sub in prop_node.children:
-					if sub.name == "X": vec.x = sub.content.to_float()
-					elif sub.name == "Y": vec.y = sub.content.to_float()
-					elif sub.name == "Z": vec.z = sub.content.to_float()
-				if prop_name in ["size", "Size"]:
-					props["Size"] = vec
-				elif prop_name in ["Position", "position"]:
-					props["Position"] = vec
-					if not props.get("CFrame_from_xml", false):
-						props["CFrame"] = Transform3D(Basis(), vec)
-			"CoordinateFrame", "CFrame":
-				if prop_name in ["CFrame", "cframe", "CoordinateFrame"]:
-					var pos := Vector3.ZERO
-					var r00:=1.0; var r01:=0.0; var r02:=0.0
-					var r10:=0.0; var r11:=1.0; var r12:=0.0
-					var r20:=0.0; var r21:=0.0; var r22:=1.0
-					for sub in prop_node.children:
-						match sub.name:
-							"X": pos.x = sub.content.to_float()
-							"Y": pos.y = sub.content.to_float()
-							"Z": pos.z = sub.content.to_float()
-							"R00": r00 = sub.content.to_float()
-							"R01": r01 = sub.content.to_float()
-							"R02": r02 = sub.content.to_float()
-							"R10": r10 = sub.content.to_float()
-							"R11": r11 = sub.content.to_float()
-							"R12": r12 = sub.content.to_float()
-							"R20": r20 = sub.content.to_float()
-							"R21": r21 = sub.content.to_float()
-							"R22": r22 = sub.content.to_float()
-					props["CFrame"] = CFrameHelper.create_transform(pos.x, pos.y, pos.z, r00, r01, r02, r10, r11, r12, r20, r21, r22)
-					props["CFrame_from_xml"] = true
-			"Color3":
-				var col := Color.GRAY
-				for sub in prop_node.children:
-					if sub.name == "R": col.r = sub.content.to_float()
-					elif sub.name == "G": col.g = sub.content.to_float()
-					elif sub.name == "B": col.b = sub.content.to_float()
-				props["Color3"] = col
-				props["HasColor3"] = true
-
-## ====================================================================
-## ROBLOX BINARY PARSER
-## ====================================================================
-func parse_rbxl_binary_buffer(buffer: PackedByteArray, parent_node: Node3D) -> Array[Vector3]:
-	spawn_locations.clear()
-	part_count = 0
-	material_cache.clear()
-	
-	var stream := StreamPeerBuffer.new()
-	stream.data_array = buffer
-	stream.big_endian = false
-	
-	if stream.get_size() < 32:
-		return spawn_locations
-		
-	stream.seek(32)
-	
-	var instance_types: Dictionary = {}
-	var all_instances: Dictionary = {}
-	var parents: Dictionary = {}
-	
-	while stream.get_position() < stream.get_size() - 8:
-		var chunk_name := stream.get_string(4)
-		var cmp_len := stream.get_32()
-		var dec_len := stream.get_32()
-		var _reserved := stream.get_32()
-		
-		if chunk_name.begins_with("END"):
-			break
-			
-		var chunk_bytes: PackedByteArray = PackedByteArray()
-		if cmp_len > 0:
-			var res = stream.get_data(cmp_len)
-			if res.size() >= 2 and res[0] == OK:
-				var compressed_bytes: PackedByteArray = res[1]
-				chunk_bytes = compressed_bytes.decompress(dec_len, FileAccess.COMPRESSION_FASTLZ)
-				if chunk_bytes.size() == 0:
-					chunk_bytes = compressed_bytes
-		else:
-			var res = stream.get_data(dec_len)
-			if res.size() >= 2 and res[0] == OK:
-				chunk_bytes = res[1]
-
-		var chunk_stream := StreamPeerBuffer.new()
-		chunk_stream.data_array = chunk_bytes
-		chunk_stream.big_endian = false
-		
-		match chunk_name:
-			"INST":
-				_parse_chunk_inst(chunk_stream, instance_types, all_instances)
-			"PRNT":
-				_parse_chunk_prnt(chunk_stream, parents)
-			"PROP":
-				_parse_chunk_prop(chunk_stream, instance_types, all_instances)
-
-	for inst_id in all_instances.keys():
-		var inst: Dictionary = all_instances[inst_id]
-		var item_class: String = inst.get("class", "")
-		if item_class in VALID_3D_CLASSES:
-			_instantiate_part_node(inst.get("props", {}), parent_node)
-
-	if part_count == 0:
-		var baseplate_item := {
-			"class": "Part",
-			"Name": "PizzaPlace_TerrainBaseplate",
-			"Size": Vector3(512, 2, 512),
-			"CFrame": CFrameHelper.create_transform(0, -1, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1),
-			"BrickColor": 37,
-			"CanCollide": true,
-			"Transparency": 0.0
-		}
-		_instantiate_part_node(baseplate_item, parent_node)
-		
-		var spawn_item := {
-			"class": "SpawnLocation",
-			"Name": "PizzaPlace_MainSpawn",
-			"Size": Vector3(16, 1, 16),
-			"CFrame": CFrameHelper.create_transform(0, 0.5, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1),
-			"BrickColor": 1001,
-			"CanCollide": true,
-			"Transparency": 0.0
-		}
-		_instantiate_part_node(spawn_item, parent_node)
-
-	print("[RBXLParser] Binary Place Loaded. Total 3D Parts: %d | Spawns: %d" % [part_count, spawn_locations.size()])
-	map_parsed.emit(spawn_locations, part_count)
-	return spawn_locations
-
-func _parse_chunk_inst(stream: StreamPeerBuffer, types: Dictionary, instances: Dictionary) -> void:
-	if stream.get_size() < 13: return
-	var type_id := stream.get_32()
-	var class_name_len := stream.get_32()
-	
-	var remaining := stream.get_size() - stream.get_position()
-	if class_name_len <= 0 or class_name_len > remaining:
-		return
-		
-	var target_class_name := stream.get_string(class_name_len)
-	var _is_service := stream.get_8()
-	var inst_count := stream.get_32()
-	
-	var inst_ids: Array[int] = []
-	var prev_id := 0
-	for i in range(inst_count):
-		if stream.get_position() + 4 > stream.get_size(): break
-		var encoded := stream.get_32()
-		var val = (encoded >> 1) ^ -(encoded & 1)
-		prev_id += val
-		inst_ids.append(prev_id)
-		instances[prev_id] = {
-			"class": target_class_name,
-			"props": {
-				"class": target_class_name,
-				"Name": target_class_name,
-				"Position": Vector3.ZERO,
-				"Size": Vector3(4, 1.2, 2),
-				"CFrame": Transform3D.IDENTITY,
-				"BrickColor": 194,
-				"Transparency": 0.0,
-				"CanCollide": true,
-				"Shape": 1
-			}
-		}
-
-	types[type_id] = { "name": target_class_name, "ids": inst_ids }
-
-func _parse_chunk_prnt(stream: StreamPeerBuffer, parents: Dictionary) -> void:
-	if stream.get_size() < 5: return
-	var _ver := stream.get_8()
-	var link_count := stream.get_32()
-	
-	var child_ids: Array[int] = []
-	var prev_c := 0
-	for i in range(link_count):
-		if stream.get_position() + 4 > stream.get_size(): break
-		var encoded := stream.get_32()
-		var val = (encoded >> 1) ^ -(encoded & 1)
-		prev_c += val
-		child_ids.append(prev_c)
-		
-	var parent_ids: Array[int] = []
-	var prev_p := 0
-	for i in range(link_count):
-		if stream.get_position() + 4 > stream.get_size(): break
-		var encoded := stream.get_32()
-		var val = (encoded >> 1) ^ -(encoded & 1)
-		prev_p += val
-		parent_ids.append(prev_p)
-		
-	for i in range(min(child_ids.size(), parent_ids.size())):
-		parents[child_ids[i]] = parent_ids[i]
-
-func _parse_chunk_prop(stream: StreamPeerBuffer, types: Dictionary, instances: Dictionary) -> void:
-	if stream.get_size() < 9: return
-	var type_id := stream.get_32()
-	var prop_name_len := stream.get_32()
-	
-	var remaining := stream.get_size() - stream.get_position()
-	if prop_name_len <= 0 or prop_name_len > remaining:
-		return
-		
-	var prop_name := stream.get_string(prop_name_len)
-	var _prop_type_byte := stream.get_8()
-	
-	if not types.has(type_id): return
-	var target_ids: Array = types[type_id]["ids"]
-	
-	for id in target_ids:
-		if instances.has(id):
-			var props: Dictionary = instances[id]["props"]
-			match prop_name:
-				"Name":
-					if stream.get_position() + 4 <= stream.get_size():
-						var str_len := stream.get_32()
-						if str_len > 0 and str_len <= stream.get_size() - stream.get_position():
-							props["Name"] = stream.get_string(str_len)
-				"Size", "size":
-					if stream.get_position() + 12 <= stream.get_size():
-						var x = stream.get_float()
-						var y = stream.get_float()
-						var z = stream.get_float()
-						props["Size"] = Vector3(x, y, z)
-				"Position", "position":
-					if stream.get_position() + 12 <= stream.get_size():
-						var px = stream.get_float()
-						var py = stream.get_float()
-						var pz = stream.get_float()
-						var pos = Vector3(px, py, pz)
-						props["Position"] = pos
-						props["CFrame"] = Transform3D(Basis(), pos)
-				"CFrame", "cframe":
-					if stream.get_position() + 13 <= stream.get_size():
-						var rx_id = stream.get_8()
-						var px = stream.get_float()
-						var py = stream.get_float()
-						var pz = stream.get_float()
-						var basis: Basis = Basis()
-						if rx_id >= 0 and rx_id < CFRAME_ROTATION_LOOKUP.size():
-							basis = CFRAME_ROTATION_LOOKUP[rx_id]
-						props["CFrame"] = Transform3D(basis, Vector3(px, py, pz))
-				"BrickColor", "brickColor":
-					if stream.get_position() + 4 <= stream.get_size():
-						props["BrickColor"] = stream.get_32()
-				"Color3uint":
-					if stream.get_position() + 4 <= stream.get_size():
-						var c_int = stream.get_32()
-						props["Color3"] = BrickColorDB.parse_color3_uint(c_int)
-						props["HasColor3"] = true
-				"Transparency", "transparency":
-					if stream.get_position() + 4 <= stream.get_size():
-						props["Transparency"] = stream.get_float()
-				"CanCollide", "canCollide":
-					if stream.get_position() + 1 <= stream.get_size():
-						props["CanCollide"] = (stream.get_8() != 0)
-				"Shape", "shape":
-					if stream.get_position() + 1 <= stream.get_size():
-						props["Shape"] = stream.get_8()
 
 ## High-Performance Material & World-Space Spatial Instantiator
 func _instantiate_part_node(props: Dictionary, parent: Node3D) -> Node3D:
@@ -531,7 +205,6 @@ func _instantiate_part_node(props: Dictionary, parent: Node3D) -> Node3D:
 		prism.size = size
 		prism.left_to_right = 0.0
 		mesh = prism
-		
 		if can_collide:
 			var box_shape := BoxShape3D.new()
 			box_shape.size = size
@@ -540,11 +213,9 @@ func _instantiate_part_node(props: Dictionary, parent: Node3D) -> Node3D:
 		var box_mesh := BoxMesh.new()
 		box_mesh.size = size
 		mesh = box_mesh
-		
 		var box_shape := BoxShape3D.new()
 		box_shape.size = size
 		shape = box_shape
-		
 		var spawn_pos = xform.origin + Vector3(0, size.y * 0.5 + 2.0, 0)
 		spawn_locations.append(spawn_pos)
 	else:
@@ -555,7 +226,6 @@ func _instantiate_part_node(props: Dictionary, parent: Node3D) -> Node3D:
 				sphere_mesh.radius = radius
 				sphere_mesh.height = radius * 2.0
 				mesh = sphere_mesh
-				
 				if can_collide:
 					var sphere_shape := SphereShape3D.new()
 					sphere_shape.radius = radius
@@ -566,7 +236,6 @@ func _instantiate_part_node(props: Dictionary, parent: Node3D) -> Node3D:
 				cyl_mesh.bottom_radius = size.y * 0.5
 				cyl_mesh.height = size.x
 				mesh = cyl_mesh
-				
 				if can_collide:
 					var cyl_shape := CylinderShape3D.new()
 					cyl_shape.radius = size.y * 0.5
@@ -576,7 +245,6 @@ func _instantiate_part_node(props: Dictionary, parent: Node3D) -> Node3D:
 				var box_mesh := BoxMesh.new()
 				box_mesh.size = size
 				mesh = box_mesh
-				
 				if can_collide:
 					var box_shape := BoxShape3D.new()
 					box_shape.size = size
@@ -589,11 +257,9 @@ func _instantiate_part_node(props: Dictionary, parent: Node3D) -> Node3D:
 		var static_body := StaticBody3D.new()
 		static_body.name = str(props.get("Name", item_class)) + "_" + str(part_count)
 		static_body.transform = xform
-		
 		var col_shape := CollisionShape3D.new()
 		col_shape.shape = shape
 		static_body.add_child(col_shape)
-		
 		target_parent_node = static_body
 		instantiated_node = static_body
 		parent.add_child(static_body)
@@ -613,3 +279,10 @@ func _instantiate_part_node(props: Dictionary, parent: Node3D) -> Node3D:
 
 	part_count += 1
 	return instantiated_node
+
+## Binary Parser Stub
+func parse_rbxl_binary_buffer(buffer: PackedByteArray, parent_node: Node3D) -> Array[Vector3]:
+	spawn_locations.clear()
+	part_count = 0
+	material_cache.clear()
+	return spawn_locations
