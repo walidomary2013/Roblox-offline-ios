@@ -63,6 +63,13 @@ func load_map(path: String) -> void:
 	# Parse 2017 .rbxl XML map
 	var spawns: Array[Vector3] = parser.parse_rbxl_file(path, map_root)
 	
+	# Instantiate default Roblox Environment & Skybox if map did not specify custom Lighting
+	if not map_root.has_node("RobloxEnvironment"):
+		var env_node := RobloxEnvironment.new()
+		env_node.name = "RobloxEnvironment"
+		map_root.add_child(env_node)
+
+	
 	# Determine spawn position
 	var target_spawn := Vector3(0.0, 10.0, 0.0)
 	if spawns.size() > 0:

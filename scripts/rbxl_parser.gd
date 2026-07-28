@@ -180,6 +180,12 @@ func _openblox_load_item(item_node: XMLNode, parent_3d_node: Node3D) -> void:
 			_parse_openblox_properties(child, props)
 			break
 
+	if item_class == "Lighting":
+		var env_node: RobloxEnvironment = RobloxEnvironment.new()
+		env_node.name = "RobloxEnvironment"
+		parent_3d_node.add_child(env_node)
+		env_node.update_lighting_from_properties(props)
+
 	if item_class in ["Script", "LocalScript"]:
 		var script_source := ""
 		for child in item_node.children:
@@ -191,6 +197,7 @@ func _openblox_load_item(item_node: XMLNode, parent_3d_node: Node3D) -> void:
 		if script_source != "":
 			var vm := LuauVM.new(parent_3d_node)
 			vm.run_script(props.get("Name", item_class), script_source, parent_3d_node)
+
 
 	if item_class in VALID_3D_CLASSES:
 		_instantiate_part_node(props, parent_3d_node)
