@@ -8,6 +8,7 @@ signal map_parsed(spawn_points: Array[Vector3], part_count: int)
 
 var spawn_locations: Array[Vector3] = []
 var part_count: int = 0
+var material_cache: Dictionary = {}
 
 const VALID_3D_CLASSES: Array[String] = [
 	"Part", "WedgePart", "CornerWedgePart", "MeshPart", 
@@ -46,6 +47,7 @@ const CFRAME_ROTATION_LOOKUP: Array[Basis] = [
 func parse_rbxl_file(file_path: String, parent_node: Node3D) -> Array[Vector3]:
 	spawn_locations.clear()
 	part_count = 0
+	material_cache.clear()
 
 	if not FileAccess.file_exists(file_path):
 		printerr("[RBXLParser] File does not exist: ", file_path)
@@ -122,13 +124,13 @@ func _build_xml_dom(xml_content: String) -> XMLNode:
 func parse_rbxl_string(xml_content: String, parent_node: Node3D) -> Array[Vector3]:
 	spawn_locations.clear()
 	part_count = 0
+	material_cache.clear()
 
 	var root_dom := _build_xml_dom(xml_content)
 	if not root_dom:
 		printerr("[RBXLParser] Failed to build XML DOM tree.")
 		return spawn_locations
 
-	# Locate top level <roblox> or <roblox version="4"> node
 	var roblox_node: XMLNode = null
 	for child in root_dom.children:
 		if child.name == "roblox":
@@ -138,7 +140,6 @@ func parse_rbxl_string(xml_content: String, parent_node: Node3D) -> Array[Vector
 	if not roblox_node:
 		roblox_node = root_dom
 
-	# Process all top-level Item instances recursively using OpenBLOX algorithm
 	for child in roblox_node.children:
 		if child.name == "Item":
 			_openblox_load_item(child, parent_node)
@@ -165,19 +166,16 @@ func _openblox_load_item(item_node: XMLNode, parent_3d_node: Node3D) -> void:
 
 	var created_3d_parent: Node3D = parent_3d_node
 
-	# Parse <Properties> child node if present
 	for child in item_node.children:
 		if child.name == "Properties":
 			_parse_openblox_properties(child, props)
 			break
 
-	# Instantiate 3D part if valid 3D class
 	if item_class in VALID_3D_CLASSES:
 		var instantiated := _instantiate_part_node(props, parent_3d_node)
 		if instantiated:
 			created_3d_parent = instantiated
 
-	# Recursively process all child <Item> nodes (OpenBLOX loadModelPartXML)
 	for child in item_node.children:
 		if child.name == "Item":
 			_openblox_load_item(child, created_3d_parent)
@@ -249,6 +247,7 @@ func _parse_openblox_properties(properties_node: XMLNode, props: Dictionary) -> 
 func parse_rbxl_binary_buffer(buffer: PackedByteArray, parent_node: Node3D) -> Array[Vector3]:
 	spawn_locations.clear()
 	part_count = 0
+	material_cache.clear()
 	
 	var stream := StreamPeerBuffer.new()
 	stream.data_array = buffer
@@ -460,6 +459,7 @@ func _parse_chunk_prop(stream: StreamPeerBuffer, types: Dictionary, instances: D
 					if stream.get_position() + 1 <= stream.get_size():
 						props["Shape"] = stream.get_8()
 
+## High-Performance Material & Collision Shared Instantiator
 func _instantiate_part_node(props: Dictionary, parent: Node3D) -> Node3D:
 	var item_class: String = props.get("class", "Part")
 	var size: Vector3 = props.get("Size", Vector3(4, 1.2, 2))
@@ -467,26 +467,29 @@ func _instantiate_part_node(props: Dictionary, parent: Node3D) -> Node3D:
 	var can_collide: bool = props.get("CanCollide", true)
 	var transparency: float = props.get("Transparency", 0.0)
 
+	if transparency >= 1.0 and not can_collide:
+		return null
+
 	var color: Color
 	if props.get("HasColor3", false):
 		color = props.get("Color3", Color.GRAY)
 	else:
 		var brick_color_id: int = props.get("BrickColor", 194)
 		color = BrickColorDB.get_color(brick_color_id)
-		
-	if transparency >= 1.0 and not can_collide:
-		return null
 
-	var static_body := StaticBody3D.new()
-	static_body.name = str(props.get("Name", item_class)) + "_" + str(part_count)
-	static_body.transform = xform
-
-	var material := StandardMaterial3D.new()
-	material.albedo_color = Color(color.r, color.g, color.b, 1.0 - transparency)
-	material.roughness = 0.5
-	material.cull_mode = BaseMaterial3D.CULL_BACK
-	if transparency > 0.0:
-		material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	# Shared Material Caching (reuses material resources across 15,000+ parts)
+	var mat_key := "%d_%d_%d_%.2f" % [int(color.r * 255), int(color.g * 255), int(color.b * 255), transparency]
+	var material: StandardMaterial3D
+	if material_cache.has(mat_key):
+		material = material_cache[mat_key]
+	else:
+		material = StandardMaterial3D.new()
+		material.albedo_color = Color(color.r, color.g, color.b, 1.0 - transparency)
+		material.roughness = 0.5
+		material.cull_mode = BaseMaterial3D.CULL_BACK
+		if transparency > 0.0:
+			material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		material_cache[mat_key] = material
 
 	var mesh: Mesh = null
 	var shape: Shape3D = null
@@ -498,9 +501,10 @@ func _instantiate_part_node(props: Dictionary, parent: Node3D) -> Node3D:
 		prism.left_to_right = 0.0
 		mesh = prism
 		
-		var box_shape := BoxShape3D.new()
-		box_shape.size = size
-		shape = box_shape
+		if can_collide:
+			var box_shape := BoxShape3D.new()
+			box_shape.size = size
+			shape = box_shape
 	elif item_class == "SpawnLocation":
 		var box_mesh := BoxMesh.new()
 		box_mesh.size = size
@@ -512,9 +516,6 @@ func _instantiate_part_node(props: Dictionary, parent: Node3D) -> Node3D:
 		
 		var spawn_pos = xform.origin + Vector3(0, size.y * 0.5 + 2.0, 0)
 		spawn_locations.append(spawn_pos)
-		
-		material.emission_enabled = true
-		material.emission = color * 0.3
 	else:
 		match shape_type:
 			0:
@@ -524,9 +525,10 @@ func _instantiate_part_node(props: Dictionary, parent: Node3D) -> Node3D:
 				sphere_mesh.height = radius * 2.0
 				mesh = sphere_mesh
 				
-				var sphere_shape := SphereShape3D.new()
-				sphere_shape.radius = radius
-				shape = sphere_shape
+				if can_collide:
+					var sphere_shape := SphereShape3D.new()
+					sphere_shape.radius = radius
+					shape = sphere_shape
 			2:
 				var cyl_mesh := CylinderMesh.new()
 				cyl_mesh.top_radius = size.y * 0.5
@@ -534,30 +536,50 @@ func _instantiate_part_node(props: Dictionary, parent: Node3D) -> Node3D:
 				cyl_mesh.height = size.x
 				mesh = cyl_mesh
 				
-				var cyl_shape := CylinderShape3D.new()
-				cyl_shape.radius = size.y * 0.5
-				cyl_shape.height = size.x
-				shape = cyl_shape
+				if can_collide:
+					var cyl_shape := CylinderShape3D.new()
+					cyl_shape.radius = size.y * 0.5
+					cyl_shape.height = size.x
+					shape = cyl_shape
 			_:
 				var box_mesh := BoxMesh.new()
 				box_mesh.size = size
 				mesh = box_mesh
 				
-				var box_shape := BoxShape3D.new()
-				box_shape.size = size
-				shape = box_shape
+				if can_collide:
+					var box_shape := BoxShape3D.new()
+					box_shape.size = size
+					shape = box_shape
+
+	# For huge 15,000+ part maps: create lightweight MeshInstance3D nodes directly if non-collidable
+	var target_parent_node: Node3D = parent
+	var instantiated_node: Node3D = null
+
+	if can_collide and shape != null:
+		var static_body := StaticBody3D.new()
+		static_body.name = str(props.get("Name", item_class)) + "_" + str(part_count)
+		static_body.transform = xform
+		
+		var col_shape := CollisionShape3D.new()
+		col_shape.shape = shape
+		static_body.add_child(col_shape)
+		
+		target_parent_node = static_body
+		instantiated_node = static_body
+		parent.add_child(static_body)
+	else:
+		var mesh_node := Node3D.new()
+		mesh_node.name = str(props.get("Name", item_class)) + "_" + str(part_count)
+		mesh_node.transform = xform
+		target_parent_node = mesh_node
+		instantiated_node = mesh_node
+		parent.add_child(mesh_node)
 
 	if transparency < 1.0 and mesh != null:
 		var mesh_instance := MeshInstance3D.new()
 		mesh_instance.mesh = mesh
 		mesh_instance.material_override = material
-		static_body.add_child(mesh_instance)
+		target_parent_node.add_child(mesh_instance)
 
-	if can_collide and shape != null:
-		var col_shape := CollisionShape3D.new()
-		col_shape.shape = shape
-		static_body.add_child(col_shape)
-
-	parent.add_child(static_body)
 	part_count += 1
-	return static_body
+	return instantiated_node
