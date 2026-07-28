@@ -104,9 +104,9 @@
 		};
 /* End PBXSourcesBuildPhase section */
 
-/* Begin QCBuildConfiguration section */
+/* Begin XCBuildConfiguration section */
 		H10000002B9A1E0000000001 /* Debug */ = {
-			isa = QCBuildConfiguration;
+			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				CLANG_ENABLE_MODULES = YES;
@@ -120,7 +120,7 @@
 			name = Debug;
 		};
 		H10000002B9A1E0000000002 /* Release */ = {
-			isa = QCBuildConfiguration;
+			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				CLANG_ENABLE_MODULES = YES;
@@ -133,7 +133,7 @@
 			};
 			name = Release;
 		};
-/* End QCBuildConfiguration section */
+/* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
 		F10000002B9A1E0000000000 /* Build configuration list for PBXNativeTarget "Novetus_iOS" */ = {
