@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="110" fill="#1A1F2C"/>
+  <defs>
+    <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#00A2FF"/>
+      <stop offset="100%" stop-color="#0066FF"/>
+    </linearGradient>
+    <linearGradient id="blockGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#E63946"/>
+      <stop offset="100%" stop-color="#D62828"/>
+    </linearGradient>
+  </defs>
+  <!-- Background Glow Ring -->
+  <circle cx="256" cy="256" r="180" fill="none" stroke="url(#grad)" stroke-width="12" opacity="0.4"/>
+  
+  <!-- Roblox 2017 Tilted Square/Block icon -->
+  <g transform="translate(256, 256) rotate(-15)">
+    <rect x="-100" y="-100" width="200" height="200" rx="30" fill="url(#blockGrad)" />
+    <!-- Inner square hole -->
+    <rect x="-35" y="-35" width="70" height="70" rx="10" fill="#1A1F2C" />
+  </g>
+</svg>
