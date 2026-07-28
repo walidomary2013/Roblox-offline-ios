@@ -22,19 +22,31 @@ func _setup_global_environment() -> void:
 		"Workspace": map_root_node,
 		"workspace": map_root_node,
 		"math": {
-			"sin": func(a): return sin(a),
-			"cos": func(a): return cos(a),
-			"tan": func(a): return tan(a),
-			"rad": func(a): return deg_to_rad(a),
-			"deg": func(a): return rad_to_deg(a),
-			"random": func(a = 0.0, b = 1.0): return randf_range(a, b),
-			"clamp": func(v, min_v, max_v): return clamp(v, min_v, max_v),
-			"abs": func(v): return abs(v),
-			"sqrt": func(v): return sqrt(v),
-			"floor": func(v): return floor(v),
-			"ceil": func(v): return ceil(v)
+			"sin": Callable(self, "_math_sin"),
+			"cos": Callable(self, "_math_cos"),
+			"tan": Callable(self, "_math_tan"),
+			"rad": Callable(self, "_math_rad"),
+			"deg": Callable(self, "_math_deg"),
+			"random": Callable(self, "_math_random"),
+			"clamp": Callable(self, "_math_clamp"),
+			"abs": Callable(self, "_math_abs"),
+			"sqrt": Callable(self, "_math_sqrt"),
+			"floor": Callable(self, "_math_floor"),
+			"ceil": Callable(self, "_math_ceil")
 		}
 	}
+
+func _math_sin(a: float) -> float: return sin(a)
+func _math_cos(a: float) -> float: return cos(a)
+func _math_tan(a: float) -> float: return tan(a)
+func _math_rad(a: float) -> float: return deg_to_rad(a)
+func _math_deg(a: float) -> float: return rad_to_deg(a)
+func _math_random(a: float = 0.0, b: float = 1.0) -> float: return randf_range(a, b)
+func _math_clamp(v: float, min_v: float, max_v: float) -> float: return clamp(v, min_v, max_v)
+func _math_abs(v: float) -> float: return abs(v)
+func _math_sqrt(v: float) -> float: return sqrt(v)
+func _math_floor(v: float) -> float: return floor(v)
+func _math_ceil(v: float) -> float: return ceil(v)
 
 func run_script(script_name: String, source_code: String, target_instance: Node3D = null) -> void:
 	if source_code.strip_edges() == "": return
