@@ -192,12 +192,21 @@ func _openblox_load_item(item_node: XMLNode, parent_3d_node: Node3D) -> void:
 		for child in item_node.children:
 			if child.name == "Properties":
 				for prop in child.children:
-					if prop.attributes.get("name", "") == "Source":
+					var pname: String = prop.attributes.get("name", "")
+					if pname in ["Source", "ProtectedString", "ScriptText", "SourceCode"]:
 						script_source = prop.content
 						break
 		if script_source != "":
+			# Unescape Roblox XML HTML entities
+			script_source = script_source.replace("&apos;", "'")
+			script_source = script_source.replace("&quot;", '"')
+			script_source = script_source.replace("&lt;", "<")
+			script_source = script_source.replace("&gt;", ">")
+			script_source = script_source.replace("&amp;", "&")
+			
 			var vm := LuauVM.new(parent_3d_node)
 			vm.run_script(props.get("Name", item_class), script_source, parent_3d_node)
+
 
 	if item_class in VALID_3D_CLASSES:
 		_instantiate_part_node(props, parent_3d_node)

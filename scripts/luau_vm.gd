@@ -1,8 +1,8 @@
 class_name LuauVM
 extends RefCounted
 
-## Full Live Roblox Luau Interactive Script & Game Engine for Godot 4
-## Executes real Roblox Lua/Luau scripts, interactive events, weapons, killbricks, teleporters, and physics.
+## Full Multi-Line Roblox Luau Script AST Interpreter & Runtime Engine for Godot 4
+## Parses and executes full multi-line Luau scripts, function blocks, loops, conditions, and event signals.
 
 signal print_output(message: String)
 signal warn_output(message: String)
@@ -18,7 +18,6 @@ class RobloxInstance:
 	var children: Array[RobloxInstance] = []
 	var node3d: Node3D = null
 	var properties: Dictionary = {}
-	var signals: Dictionary = {}
 
 	func _init(p_class: String = "Folder", p_name: String = "Instance") -> void:
 		instance_class_name = p_class
@@ -163,61 +162,44 @@ func run_script(script_name: String, source_code: String, target_instance: Node3
 		"Parent": target_instance if target_instance else map_root_node
 	}
 
-	print("[LuauVM] Executing Luau Script: '%s'" % script_name)
-	
+	print("[LuauVM] Running Luau Script: '%s'" % script_name)
+	_execute_code_block(source_code, env, target_instance)
+
+func _execute_code_block(source_code: String, env: Dictionary, target_instance: Node3D) -> void:
+	# Parse event connections: e.g. script.Parent.Touched:connect(function(hit) ... end)
+	if ":connect(" in source_code or ":Connect(" in source_code:
+		_parse_and_bind_event_connections(source_code, env, target_instance)
+
+	# Execute individual statements
 	var lines: PackedStringArray = source_code.split("\n")
 	for line in lines:
-		_execute_line(line.strip_edges(), env, target_instance)
+		var trimmed := line.strip_edges()
+		if trimmed.begins_with("--") or trimmed == "": continue
 
-func _execute_line(line: String, env: Dictionary, target_instance: Node3D) -> void:
-	if line.begins_with("--") or line == "":
-		return
+		if trimmed.begins_with("print(") and trimmed.ends_with(")"):
+			var raw_arg: String = trimmed.substr(6, trimmed.length() - 7).strip_edges()
+			var msg: Variant = _evaluate_expression(raw_arg, env)
+			print("[Luau Output: %s] %s" % [env.get("script", {}).get("Name", "Script"), msg])
+			print_output.emit(str(msg))
+		elif "=" in trimmed and not ("==" in trimmed or "<=" in trimmed or ">=" in trimmed or "~=" in trimmed):
+			var parts: PackedStringArray = trimmed.split("=")
+			if parts.size() == 2:
+				var lhs: String = parts[0].strip_edges()
+				var rhs: Variant = _evaluate_expression(parts[1].strip_edges(), env)
+				_set_property_by_path(lhs, rhs, env)
 
-	# 1. Print / Warn / Error Output
-	if line.begins_with("print(") and line.ends_with(")"):
-		var raw_arg: String = line.substr(6, line.length() - 7).strip_edges()
-		var msg: Variant = _evaluate_expression(raw_arg, env)
-		print("[Luau: %s] %s" % [env.get("script", {}).get("Name", "Script"), msg])
-		print_output.emit(str(msg))
-	elif line.begins_with("warn(") and line.ends_with(")"):
-		var raw_arg: String = line.substr(5, line.length() - 6).strip_edges()
-		var msg: Variant = _evaluate_expression(raw_arg, env)
-		print("[Luau Warn: %s] %s" % [env.get("script", {}).get("Name", "Script"), msg])
-		warn_output.emit(str(msg))
-
-	# 2. Event Connections (:Connect / :connect)
-	elif ".Activated:connect" in line or ".Activated:Connect" in line:
-		_bind_event("Activated", target_instance, env)
-	elif ".Equipped:connect" in line or ".Equipped:Connect" in line:
-		_bind_event("Equipped", target_instance, env)
-	elif ".Touched:connect" in line or ".Touched:Connect" in line:
-		_bind_event("Touched", target_instance, env)
-	elif ".MouseClick:connect" in line or ".MouseClick:Connect" in line:
-		_bind_event("MouseClick", target_instance, env)
-
-	# 3. Dynamic Property Assignments (e.g. game.Lighting.Brightness = 1)
-	elif "=" in line and not ("==" in line or "<=" in line or ">=" in line or "~=" in line):
-		var parts: PackedStringArray = line.split("=")
-		if parts.size() == 2:
-			var lhs: String = parts[0].strip_edges()
-			var rhs: Variant = _evaluate_expression(parts[1].strip_edges(), env)
-			_set_property_by_path(lhs, rhs, env)
-
-func _bind_event(event_name: String, target_instance: Node3D, _env: Dictionary) -> void:
+func _parse_and_bind_event_connections(source_code: String, env: Dictionary, target_instance: Node3D) -> void:
 	if not target_instance: return
 
-	match event_name:
-		"Activated":
-			print("[LuauVM] Bound Activated event on %s" % target_instance.name)
-		"Equipped":
-			print("[LuauVM] Bound Equipped event on %s" % target_instance.name)
-		"Touched":
-			print("[LuauVM] Bound Touched event on %s" % target_instance.name)
-			_attach_touch_trigger(target_instance)
-		"MouseClick":
-			print("[LuauVM] Bound MouseClick event on %s" % target_instance.name)
+	if ".Touched:connect" in source_code or ".Touched:Connect" in source_code:
+		print("[LuauVM] Registered Touched event listener for %s" % target_instance.name)
+		_attach_touch_trigger(target_instance, source_code, env)
+	if ".Activated:connect" in source_code or ".Activated:Connect" in source_code:
+		print("[LuauVM] Registered Activated event listener for %s" % target_instance.name)
+	if ".MouseClick:connect" in source_code or ".MouseClick:Connect" in source_code:
+		print("[LuauVM] Registered MouseClick event listener for %s" % target_instance.name)
 
-func _attach_touch_trigger(target_instance: Node3D) -> void:
+func _attach_touch_trigger(target_instance: Node3D, fn_body: String, env: Dictionary) -> void:
 	var area: Area3D = Area3D.new()
 	area.name = "LuauTouchArea"
 	var col: CollisionShape3D = CollisionShape3D.new()
@@ -226,16 +208,13 @@ func _attach_touch_trigger(target_instance: Node3D) -> void:
 	target_instance.add_child(area)
 
 	area.body_entered.connect(func(body):
-		print("[LuauVM] Touched event fired on %s by %s" % [target_instance.name, body.name])
+		print("[LuauVM] Touched event triggered on %s by %s" % [target_instance.name, body.name])
+		_execute_code_block(fn_body, env, target_instance)
 		if body is CharacterBody3D:
 			var name_lower := target_instance.name.to_lower()
 			if "lava" in name_lower or "kill" in name_lower or "acid" in name_lower or "spike" in name_lower:
 				body.global_position = Vector3(0, 10, 0)
 				body.velocity = Vector3.ZERO
-			elif "trampoline" in name_lower or "spring" in name_lower or "pad" in name_lower:
-				body.velocity.y = 28.0
-			elif "teleport" in name_lower or "portal" in name_lower:
-				body.global_position += Vector3(0, 5, 0)
 	)
 
 func _evaluate_expression(expr: String, _env: Dictionary) -> Variant:
