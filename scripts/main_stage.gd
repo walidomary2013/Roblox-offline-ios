@@ -1,18 +1,19 @@
+class_name MainStage
 extends Node3D
 
-## Main Stage Manager for Roblox 2017 Map Viewer
+## Main Stage Controller with Novetus Standalone Engine Integration
 
-@export var map_path: String = "res://maps/crossroads_2017.rbxl"
-
-@onready var map_root: Node3D = $MapRoot
-@onready var player: PlayerController = $PlayerCharacter
-@onready var joystick_hud: VirtualJoystickHUD = $CanvasLayer/VirtualJoystick
-@onready var status_label: Label = $CanvasLayer/DebugPanel/VBoxContainer/StatusLabel
-@onready var map_option_button: OptionButton = $CanvasLayer/DebugPanel/VBoxContainer/HBoxContainer/MapOptionButton
-@onready var load_file_button: Button = $CanvasLayer/DebugPanel/VBoxContainer/HBoxContainer/LoadFileButton
-@onready var file_dialog: FileDialog = $CanvasLayer/FileDialog
+@export var map_path: String = "res://REAL.rbxlx"
+@export var map_root: Node3D
+@export var player: CharacterBody3D
+@export var map_option_button: OptionButton
+@export var load_file_button: Button
+@export var file_dialog: FileDialog
+@export var joystick_hud: Control
+@export var status_label: Label
 
 var parser: RBXLParser
+var novetus: NovetusLauncher
 
 const MAP_PRESETS: Array[Dictionary] = [
 	{"name": "Work at a Pizza Place (2017)", "path": "res://REAL.rbxlx"},
@@ -23,11 +24,11 @@ const MAP_PRESETS: Array[Dictionary] = [
 	{"name": "Obby & Playground", "path": "res://maps/sample_2017_place.rbxl"}
 ]
 
-
 func _ready() -> void:
 	parser = RBXLParser.new()
+	novetus = NovetusLauncher.new()
+	novetus.client_launched.connect(_on_novetus_client_launched)
 	
-	# Setup Map Selection OptionButton UI
 	if map_option_button:
 		map_option_button.clear()
 		for preset in MAP_PRESETS:
@@ -53,26 +54,21 @@ func _on_custom_file_selected(path: String) -> void:
 	load_map(path)
 
 func load_map(path: String) -> void:
+	map_path = path
 	if status_label:
-		status_label.text = "Loading Roblox Map: " + path.get_file()
+		status_label.text = "Map Loaded: " + path.get_file()
 		
-	# Clear existing 3D map nodes
 	for child in map_root.get_children():
 		child.queue_free()
 
-	# Parse 2017 .rbxl XML map
 	var spawns: Array[Vector3] = parser.parse_rbxl_file(path, map_root)
 	
-	# Instantiate default Roblox Environment & Skybox if map did not specify custom Lighting
 	const RobloxEnvScript = preload("res://scripts/roblox_environment.gd")
 	if not map_root.has_node("RobloxEnvironment"):
 		var env_node = RobloxEnvScript.new()
 		env_node.name = "RobloxEnvironment"
 		map_root.add_child(env_node)
 
-
-	
-	# Determine spawn position
 	var target_spawn := Vector3(0.0, 10.0, 0.0)
 	if spawns.size() > 0:
 		target_spawn = spawns[0]
@@ -80,14 +76,22 @@ func load_map(path: String) -> void:
 	else:
 		print("[MainStage] No SpawnLocation found, spawning at default origin: ", target_spawn)
 
-	# Position player character
 	if player:
 		player.global_position = target_spawn
 		player.velocity = Vector3.ZERO
 		
-	# Hook HUD touch controls to player
 	if joystick_hud and player:
-		joystick_hud.set_player(player)
+		if joystick_hud.has_signal("joystick_moved"):
+			joystick_hud.joystick_moved.connect(func(dir: Vector2): player.input_vector = dir)
+		if joystick_hud.has_signal("jump_pressed"):
+			joystick_hud.jump_pressed.connect(func(): player.request_jump())
 
-	if status_label:
-		status_label.text = "Map Loaded: %s | Parts: %d | Spawns: %d" % [path.get_file(), parser.part_count, spawns.size()]
+	# Launch Novetus Native Client Bridge
+	if novetus:
+		var v := NovetusLauncher.ClientVersion.CLIENT_2017_LATE
+		if "2007" in path:
+			v = NovetusLauncher.ClientVersion.CLIENT_2007_MARCH
+		novetus.launch_standalone_roblox_client(path, v)
+
+func _on_novetus_client_launched(client_name: String, place_path: String) -> void:
+	print("[MainStage] Novetus Engine Bridge active for: ", client_name, " | ", place_path)
