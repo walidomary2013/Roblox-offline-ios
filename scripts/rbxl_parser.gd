@@ -9,19 +9,119 @@ signal map_parsed(spawn_points: Array[Vector3], part_count: int)
 var spawn_locations: Array[Vector3] = []
 var part_count: int = 0
 
+const FALLBACK_2017_MAP_XML: String = """<roblox version="4">
+	<Item class="Workspace" referent="RBX0">
+		<Item class="Part" referent="RBX1">
+			<Properties>
+				<string name="Name">Baseplate</string>
+				<bool name="Anchored">true</bool>
+				<bool name="CanCollide">true</bool>
+				<int name="BrickColor">37</int>
+				<CoordinateFrame name="CFrame">
+					<X>0</X><Y>-1</Y><Z>0</Z>
+					<R00>1</R00><R01>0</R01><R02>0</R02>
+					<R10>0</R10><R11>1</R11><R12>0</R12>
+					<R20>0</R20><R21>0</R21><R22>1</R22>
+				</CoordinateFrame>
+				<Vector3 name="size"><X>256</X><Y>2</Y><Z>256</Z></Vector3>
+				<float name="Transparency">0</float>
+				<token name="shape">1</token>
+			</Properties>
+		</Item>
+		<Item class="SpawnLocation" referent="RBX2">
+			<Properties>
+				<string name="Name">SpawnLocation</string>
+				<bool name="Anchored">true</bool>
+				<bool name="CanCollide">true</bool>
+				<int name="BrickColor">1001</int>
+				<CoordinateFrame name="CFrame">
+					<X>0</X><Y>0.5</Y><Z>0</Z>
+					<R00>1</R00><R01>0</R01><R02>0</R02>
+					<R10>0</R10><R11>1</R11><R12>0</R12>
+					<R20>0</R20><R21>0</R21><R22>1</R22>
+				</CoordinateFrame>
+				<Vector3 name="size"><X>12</X><Y>1</Y><Z>12</Z></Vector3>
+				<float name="Transparency">0</float>
+				<token name="shape">1</token>
+			</Properties>
+		</Item>
+		<Item class="Part" referent="RBX3">
+			<Properties>
+				<string name="Name">BluePillar</string>
+				<bool name="Anchored">true</bool>
+				<bool name="CanCollide">true</bool>
+				<int name="BrickColor">23</int>
+				<CoordinateFrame name="CFrame">
+					<X>-20</X><Y>8</Y><Z>-20</Z>
+					<R00>1</R00><R01>0</R01><R02>0</R02>
+					<R10>0</R10><R11>1</R11><R12>0</R12>
+					<R20>0</R20><R21>0</R21><R22>1</R22>
+				</CoordinateFrame>
+				<Vector3 name="size"><X>4</X><Y>16</Y><Z>4</Z></Vector3>
+				<float name="Transparency">0</float>
+				<token name="shape">1</token>
+			</Properties>
+		</Item>
+		<Item class="WedgePart" referent="RBX4">
+			<Properties>
+				<string name="Name">RedRamp</string>
+				<bool name="Anchored">true</bool>
+				<bool name="CanCollide">true</bool>
+				<int name="BrickColor">21</int>
+				<CoordinateFrame name="CFrame">
+					<X>15</X><Y>4</Y><Z>-10</Z>
+					<R00>1</R00><R01>0</R01><R02>0</R02>
+					<R10>0</R10><R11>1</R11><R12>0</R12>
+					<R20>0</R20><R21>0</R21><R22>1</R22>
+				</CoordinateFrame>
+				<Vector3 name="size"><X>8</X><Y>8</Y><Z>16</Z></Vector3>
+				<float name="Transparency">0</float>
+				<token name="shape">1</token>
+			</Properties>
+		</Item>
+		<Item class="Part" referent="RBX5">
+			<Properties>
+				<string name="Name">YellowPlatform</string>
+				<bool name="Anchored">true</bool>
+				<bool name="CanCollide">true</bool>
+				<int name="BrickColor">24</int>
+				<CoordinateFrame name="CFrame">
+					<X>0</X><Y>3</Y><Z>-30</Z>
+					<R00>1</R00><R01>0</R01><R02>0</R02>
+					<R10>0</R10><R11>1</R11><R12>0</R12>
+					<R20>0</R20><R21>0</R21><R22>1</R22>
+				</CoordinateFrame>
+				<Vector3 name="size"><X>16</X><Y>6</Y><Z>16</Z></Vector3>
+				<float name="Transparency">0</float>
+				<token name="shape">2</token>
+			</Properties>
+		</Item>
+	</Item>
+</roblox>"""
+
 ## Parse an XML .rbxl file from a given path (e.g. "res://maps/sample_2017_place.rbxl")
 func parse_rbxl_file(file_path: String, parent_node: Node3D) -> Array[Vector3]:
+	if FileAccess.file_exists(file_path):
+		var file := FileAccess.open(file_path, FileAccess.READ)
+		if file:
+			var xml_content := file.get_as_text()
+			file.close()
+			if xml_content.strip_edges() != "":
+				print("[RBXLParser] Loading .rbxl file from disk: ", file_path)
+				return parse_rbxl_string(xml_content, parent_node)
+
+	print("[RBXLParser] File not found or unreadable in PCK (%s), loading embedded 2017 fallback map..." % file_path)
+	return parse_rbxl_string(FALLBACK_2017_MAP_XML, parent_node)
+
+## Parse an XML .rbxl string buffer
+func parse_rbxl_string(xml_content: String, parent_node: Node3D) -> Array[Vector3]:
 	spawn_locations.clear()
 	part_count = 0
 	
-	if not FileAccess.file_exists(file_path):
-		printerr("[RBXLParser] File does not exist: ", file_path)
-		return spawn_locations
-
 	var parser := XMLParser.new()
-	var err := parser.open(file_path)
+	var err := parser.open_buffer(xml_content.to_utf8_buffer())
 	if err != OK:
-		printerr("[RBXLParser] Failed to open XML file: ", err)
+		printerr("[RBXLParser] Failed to open XML string buffer: ", err)
 		return spawn_locations
 
 	var item_stack: Array[Dictionary] = []
@@ -143,7 +243,6 @@ func _instantiate_part_node(props: Dictionary, parent: Node3D) -> void:
 	var can_collide: bool = props.get("CanCollide", true)
 	var transparency: float = props.get("Transparency", 0.0)
 
-	# Calculate color
 	var color: Color
 	if props.get("HasColor3", false):
 		color = props.get("Color3", Color.GRAY)
@@ -151,16 +250,13 @@ func _instantiate_part_node(props: Dictionary, parent: Node3D) -> void:
 		var brick_color_id: int = props.get("BrickColor", 194)
 		color = BrickColorDB.get_color(brick_color_id)
 		
-	# Skip completely transparent non-collidable parts
 	if transparency >= 1.0 and not can_collide:
 		return
 
-	# Parent StaticBody3D for physics collisions
 	var static_body := StaticBody3D.new()
 	static_body.name = str(props.get("Name", item_class)) + "_" + str(part_count)
 	static_body.transform = xform
 
-	# Material setup
 	var material := StandardMaterial3D.new()
 	material.albedo_color = Color(color.r, color.g, color.b, 1.0 - transparency)
 	material.roughness = 0.5
@@ -170,7 +266,7 @@ func _instantiate_part_node(props: Dictionary, parent: Node3D) -> void:
 
 	var mesh: Mesh = null
 	var shape: Shape3D = null
-	var shape_type: int = props.get("Shape", 1) # Block = 1, Ball = 0, Cylinder = 2
+	var shape_type: int = props.get("Shape", 1)
 
 	if item_class == "WedgePart":
 		var prism := PrismMesh.new()
@@ -190,7 +286,6 @@ func _instantiate_part_node(props: Dictionary, parent: Node3D) -> void:
 		box_shape.size = size
 		shape = box_shape
 		
-		# Record spawn position
 		var spawn_pos = xform.origin + Vector3(0, size.y * 0.5 + 2.0, 0)
 		spawn_locations.append(spawn_pos)
 		
@@ -198,7 +293,7 @@ func _instantiate_part_node(props: Dictionary, parent: Node3D) -> void:
 		material.emission = color * 0.3
 	else:
 		match shape_type:
-			0: # Ball / Sphere
+			0:
 				var sphere_mesh := SphereMesh.new()
 				var radius = min(size.x, min(size.y, size.z)) * 0.5
 				sphere_mesh.radius = radius
@@ -208,7 +303,7 @@ func _instantiate_part_node(props: Dictionary, parent: Node3D) -> void:
 				var sphere_shape := SphereShape3D.new()
 				sphere_shape.radius = radius
 				shape = sphere_shape
-			2: # Cylinder
+			2:
 				var cyl_mesh := CylinderMesh.new()
 				cyl_mesh.top_radius = size.y * 0.5
 				cyl_mesh.bottom_radius = size.y * 0.5
@@ -219,7 +314,7 @@ func _instantiate_part_node(props: Dictionary, parent: Node3D) -> void:
 				cyl_shape.radius = size.y * 0.5
 				cyl_shape.height = size.x
 				shape = cyl_shape
-			_: # Default Block / Part
+			_:
 				var box_mesh := BoxMesh.new()
 				box_mesh.size = size
 				mesh = box_mesh
@@ -228,14 +323,12 @@ func _instantiate_part_node(props: Dictionary, parent: Node3D) -> void:
 				box_shape.size = size
 				shape = box_shape
 
-	# Attach MeshInstance3D
 	if transparency < 1.0 and mesh != null:
 		var mesh_instance := MeshInstance3D.new()
 		mesh_instance.mesh = mesh
 		mesh_instance.material_override = material
 		static_body.add_child(mesh_instance)
 
-	# Attach CollisionShape3D
 	if can_collide and shape != null:
 		var col_shape := CollisionShape3D.new()
 		col_shape.shape = shape
