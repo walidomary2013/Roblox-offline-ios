@@ -1,0 +1,335 @@
+<roblox xmlns:xmime="http://www.w3.org/2005/05/xmlmime" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://www.roblox.com/roblox.xsd" version="4">
+	<External>null</External>
+	<External>nil</External>
+	<Item class="Workspace" referent="RBX0">
+		<Properties>
+			<string name="Name">Workspace</string>
+			<bool name="FilteringEnabled">false</bool>
+		</Properties>
+		
+		<!-- Main Terrain / Grass Island Baseplate -->
+		<Item class="Part" referent="RBX_Baseplate">
+			<Properties>
+				<string name="Name">CrossroadsTerrain</string>
+				<bool name="Anchored">true</bool>
+				<bool name="CanCollide">true</bool>
+				<int name="BrickColor">37</int>
+				<CoordinateFrame name="CFrame">
+					<X>0</X><Y>-2</Y><Z>0</Z>
+					<R00>1</R00><R01>0</R01><R02>0</R02>
+					<R10>0</R10><R11>1</R11><R12>0</R12>
+					<R20>0</R20><R21>0</R21><R22>1</R22>
+				</CoordinateFrame>
+				<Vector3 name="size"><X>300</X><Y>4</Y><Z>300</Z></Vector3>
+				<float name="Transparency">0</float>
+				<token name="shape">1</token>
+			</Properties>
+		</Item>
+
+		<!-- Main Spawn Platform 1 -->
+		<Item class="SpawnLocation" referent="RBX_Spawn1">
+			<Properties>
+				<string name="Name">MainSpawn</string>
+				<bool name="Anchored">true</bool>
+				<bool name="CanCollide">true</bool>
+				<int name="BrickColor">1001</int>
+				<CoordinateFrame name="CFrame">
+					<X>0</X><Y>0.5</Y><Z>40</Z>
+					<R00>1</R00><R01>0</R01><R02>0</R02>
+					<R10>0</R10><R11>1</R11><R12>0</R12>
+					<R20>0</R20><R21>0</R21><R22>1</R22>
+				</CoordinateFrame>
+				<Vector3 name="size"><X>16</X><Y>1</Y><Z>16</Z></Vector3>
+				<float name="Transparency">0</float>
+				<token name="shape">1</token>
+			</Properties>
+		</Item>
+
+		<!-- Main Spawn Platform 2 (Castle Courtyard) -->
+		<Item class="SpawnLocation" referent="RBX_Spawn2">
+			<Properties>
+				<string name="Name">CastleSpawn</string>
+				<bool name="Anchored">true</bool>
+				<bool name="CanCollide">true</bool>
+				<int name="BrickColor">1001</int>
+				<CoordinateFrame name="CFrame">
+					<X>-60</X><Y>0.5</Y><Z>-60</Z>
+					<R00>1</R00><R01>0</R01><R02>0</R02>
+					<R10>0</R10><R11>1</R11><R12>0</R12>
+					<R20>0</R20><R21>0</R21><R22>1</R22>
+				</CoordinateFrame>
+				<Vector3 name="size"><X>12</X><Y>1</Y><Z>12</Z></Vector3>
+				<float name="Transparency">0</float>
+				<token name="shape">1</token>
+			</Properties>
+		</Item>
+
+		<!-- ==================== CASTLE FORTRESS ==================== -->
+		<!-- Castle Floor -->
+		<Item class="Part" referent="RBX_CastleFloor">
+			<Properties>
+				<string name="Name">CastleFloor</string>
+				<bool name="Anchored">true</bool>
+				<bool name="CanCollide">true</bool>
+				<int name="BrickColor">194</int>
+				<CoordinateFrame name="CFrame">
+					<X>-70</X><Y>2</Y><Z>-70</Z>
+					<R00>1</R00><R01>0</R01><R02>0</R02>
+					<R10>0</R10><R11>1</R11><R12>0</R12>
+					<R20>0</R20><R21>0</R21><R22>1</R22>
+				</CoordinateFrame>
+				<Vector3 name="size"><X>60</X><Y>4</Y><Z>60</Z></Vector3>
+				<float name="Transparency">0</float>
+				<token name="shape">1</token>
+			</Properties>
+		</Item>
+
+		<!-- Castle North Wall -->
+		<Item class="Part" referent="RBX_CastleWallN">
+			<Properties>
+				<string name="Name">CastleWallN</string>
+				<bool name="Anchored">true</bool>
+				<bool name="CanCollide">true</bool>
+				<int name="BrickColor">199</int>
+				<CoordinateFrame name="CFrame">
+					<X>-70</X><Y>14</Y><Z>-98</Z>
+					<R00>1</R00><R01>0</R01><R02>0</R02>
+					<R10>0</R10><R11>1</R11><R12>0</R12>
+					<R20>0</R20><R21>0</R21><R22>1</R22>
+				</CoordinateFrame>
+				<Vector3 name="size"><X>60</X><Y>20</Y><Z>4</Z></Vector3>
+				<float name="Transparency">0</float>
+				<token name="shape">1</token>
+			</Properties>
+		</Item>
+
+		<!-- Castle West Wall -->
+		<Item class="Part" referent="RBX_CastleWallW">
+			<Properties>
+				<string name="Name">CastleWallW</string>
+				<bool name="Anchored">true</bool>
+				<bool name="CanCollide">true</bool>
+				<int name="BrickColor">199</int>
+				<CoordinateFrame name="CFrame">
+					<X>-98</X><Y>14</Y><Z>-70</Z>
+					<R00>1</R00><R01>0</R01><R02>0</R02>
+					<R10>0</R10><R11>1</R11><R12>0</R12>
+					<R20>0</R20><R21>0</R21><R22>1</R22>
+				</CoordinateFrame>
+				<Vector3 name="size"><X>4</X><Y>20</Y><Z>60</Z></Vector3>
+				<float name="Transparency">0</float>
+				<token name="shape">1</token>
+			</Properties>
+		</Item>
+
+		<!-- Castle Tower Corner NW -->
+		<Item class="Part" referent="RBX_CastleTowerNW">
+			<Properties>
+				<string name="Name">CastleTowerNW</string>
+				<bool name="Anchored">true</bool>
+				<bool name="CanCollide">true</bool>
+				<int name="BrickColor">106</int>
+				<CoordinateFrame name="CFrame">
+					<X>-98</X><Y>22</Y><Z>-98</Z>
+					<R00>1</R00><R01>0</R01><R02>0</R02>
+					<R10>0</R10><R11>1</R11><R12>0</R12>
+					<R20>0</R20><R21>0</R21><R22>1</R22>
+				</CoordinateFrame>
+				<Vector3 name="size"><X>12</X><Y>36</Y><Z>12</Z></Vector3>
+				<float name="Transparency">0</float>
+				<token name="shape">1</token>
+			</Properties>
+		</Item>
+
+		<!-- Castle Ramp / Entrance Staircase -->
+		<Item class="WedgePart" referent="RBX_CastleRamp">
+			<Properties>
+				<string name="Name">CastleStairs</string>
+				<bool name="Anchored">true</bool>
+				<bool name="CanCollide">true</bool>
+				<int name="BrickColor">194</int>
+				<CoordinateFrame name="CFrame">
+					<X>-70</X><Y>2</Y><Z>-35</Z>
+					<R00>1</R00><R01>0</R01><R02>0</R02>
+					<R10>0</R10><R11>1</R11><R12>0</R12>
+					<R20>0</R20><R21>0</R21><R22>1</R22>
+				</CoordinateFrame>
+				<Vector3 name="size"><X>16</X><Y>4</Y><Z>16</Z></Vector3>
+				<float name="Transparency">0</float>
+				<token name="shape">1</token>
+			</Properties>
+		</Item>
+
+		<!-- ==================== THE HEIGHTS TOWER ==================== -->
+		<!-- Heights Tower Base -->
+		<Item class="Part" referent="RBX_TowerBase">
+			<Properties>
+				<string name="Name">HeightsTowerBase</string>
+				<bool name="Anchored">true</bool>
+				<bool name="CanCollide">true</bool>
+				<int name="BrickColor">23</int>
+				<CoordinateFrame name="CFrame">
+					<X>70</X><Y>15</Y><Z>-70</Z>
+					<R00>1</R00><R01>0</R01><R02>0</R02>
+					<R10>0</R10><R11>1</R11><R12>0</R12>
+					<R20>0</R20><R21>0</R21><R22>1</R22>
+				</CoordinateFrame>
+				<Vector3 name="size"><X>16</X><Y>30</Y><Z>16</Z></Vector3>
+				<float name="Transparency">0</float>
+				<token name="shape">1</token>
+			</Properties>
+		</Item>
+
+		<!-- Heights Mid Level Platform -->
+		<Item class="Part" referent="RBX_TowerPlatform1">
+			<Properties>
+				<string name="Name">HeightsMidPlatform</string>
+				<bool name="Anchored">true</bool>
+				<bool name="CanCollide">true</bool>
+				<int name="BrickColor">24</int>
+				<CoordinateFrame name="CFrame">
+					<X>70</X><Y>31</Y><Z>-70</Z>
+					<R00>1</R00><R01>0</R01><R02>0</R02>
+					<R10>0</R10><R11>1</R11><R12>0</R12>
+					<R20>0</R20><R21>0</R21><R22>1</R22>
+				</CoordinateFrame>
+				<Vector3 name="size"><X>32</X><Y>2</Y><Z>32</Z></Vector3>
+				<float name="Transparency">0</float>
+				<token name="shape">1</token>
+			</Properties>
+		</Item>
+
+		<!-- Heights Top Spire Tower -->
+		<Item class="Part" referent="RBX_TowerSpire">
+			<Properties>
+				<string name="Name">HeightsSpire</string>
+				<bool name="Anchored">true</bool>
+				<bool name="CanCollide">true</bool>
+				<int name="BrickColor">23</int>
+				<CoordinateFrame name="CFrame">
+					<X>70</X><Y>46</Y><Z>-70</Z>
+					<R00>1</R00><R01>0</R01><R02>0</R02>
+					<R10>0</R10><R11>1</R11><R12>0</R12>
+					<R20>0</R20><R21>0</R21><R22>1</R22>
+				</CoordinateFrame>
+				<Vector3 name="size"><X>8</X><Y>28</Y><Z>8</Z></Vector3>
+				<float name="Transparency">0</float>
+				<token name="shape">1</token>
+			</Properties>
+		</Item>
+
+		<!-- Heights Ramp Stair 1 -->
+		<Item class="WedgePart" referent="RBX_TowerStairs1">
+			<Properties>
+				<string name="Name">TowerRamp1</string>
+				<bool name="Anchored">true</bool>
+				<bool name="CanCollide">true</bool>
+				<int name="BrickColor">23</int>
+				<CoordinateFrame name="CFrame">
+					<X>70</X><Y>8</Y><Z>-45</Z>
+					<R00>1</R00><R01>0</R01><R02>0</R02>
+					<R10>0</R10><R11>1</R11><R12>0</R12>
+					<R20>0</R20><R21>0</R21><R22>1</R22>
+				</CoordinateFrame>
+				<Vector3 name="size"><X>8</X><Y>16</Y><Z>30</Z></Vector3>
+				<float name="Transparency">0</float>
+				<token name="shape">1</token>
+			</Properties>
+		</Item>
+
+		<!-- ==================== LAVA PIT & BRIDGE ==================== -->
+		<!-- Lava Pool Platform -->
+		<Item class="Part" referent="RBX_LavaPool">
+			<Properties>
+				<string name="Name">LavaPit</string>
+				<bool name="Anchored">true</bool>
+				<bool name="CanCollide">true</bool>
+				<int name="BrickColor">21</int>
+				<CoordinateFrame name="CFrame">
+					<X>-60</X><Y>0.2</Y><Z>60</Z>
+					<R00>1</R00><R01>0</R01><R02>0</R02>
+					<R10>0</R10><R11>1</R11><R12>0</R12>
+					<R20>0</R20><R21>0</R21><R22>1</R22>
+				</CoordinateFrame>
+				<Vector3 name="size"><X>50</X><Y>0.5</Y><Z>50</Z></Vector3>
+				<float name="Transparency">0.1</float>
+				<token name="shape">1</token>
+			</Properties>
+		</Item>
+
+		<!-- Red Danger Bridge over Lava -->
+		<Item class="Part" referent="RBX_LavaBridge">
+			<Properties>
+				<string name="Name">LavaBridge</string>
+				<bool name="Anchored">true</bool>
+				<bool name="CanCollide">true</bool>
+				<int name="BrickColor">38</int>
+				<CoordinateFrame name="CFrame">
+					<X>-60</X><Y>6</Y><Z>60</Z>
+					<R00>1</R00><R01>0</R01><R02>0</R02>
+					<R10>0</R10><R11>1</R11><R12>0</R12>
+					<R20>0</R20><R21>0</R21><R22>1</R22>
+				</CoordinateFrame>
+				<Vector3 name="size"><X>6</X><Y>1.5</Y><Z>70</Z></Vector3>
+				<float name="Transparency">0</float>
+				<token name="shape">1</token>
+			</Properties>
+		</Item>
+
+		<!-- ==================== OBBY STEPPING BLOCKS ==================== -->
+		<Item class="Part" referent="RBX_Obby1">
+			<Properties>
+				<string name="Name">ObbyBlock1</string>
+				<bool name="Anchored">true</bool>
+				<bool name="CanCollide">true</bool>
+				<int name="BrickColor">24</int>
+				<CoordinateFrame name="CFrame">
+					<X>20</X><Y>4</Y><Z>20</Z>
+					<R00>1</R00><R01>0</R01><R02>0</R02>
+					<R10>0</R10><R11>1</R11><R12>0</R12>
+					<R20>0</R20><R21>0</R21><R22>1</R22>
+				</CoordinateFrame>
+				<Vector3 name="size"><X>8</X><Y>2</Y><Z>8</Z></Vector3>
+				<float name="Transparency">0</float>
+				<token name="shape">1</token>
+			</Properties>
+		</Item>
+
+		<Item class="Part" referent="RBX_Obby2">
+			<Properties>
+				<string name="Name">ObbyBlock2</string>
+				<bool name="Anchored">true</bool>
+				<bool name="CanCollide">true</bool>
+				<int name="BrickColor">23</int>
+				<CoordinateFrame name="CFrame">
+					<X>40</X><Y>8</Y><Z>30</Z>
+					<R00>1</R00><R01>0</R01><R02>0</R02>
+					<R10>0</R10><R11>1</R11><R12>0</R12>
+					<R20>0</R20><R21>0</R21><R22>1</R22>
+				</CoordinateFrame>
+				<Vector3 name="size"><X>8</X><Y>2</Y><Z>8</Z></Vector3>
+				<float name="Transparency">0</float>
+				<token name="shape">1</token>
+			</Properties>
+		</Item>
+
+		<Item class="Part" referent="RBX_Obby3">
+			<Properties>
+				<string name="Name">ObbyBlock3</string>
+				<bool name="Anchored">true</bool>
+				<bool name="CanCollide">true</bool>
+				<int name="BrickColor">21</int>
+				<CoordinateFrame name="CFrame">
+					<X>60</X><Y>14</Y><Z>40</Z>
+					<R00>1</R00><R01>0</R01><R02>0</R02>
+					<R10>0</R10><R11>1</R11><R12>0</R12>
+					<R20>0</R20><R21>0</R21><R22>1</R22>
+				</CoordinateFrame>
+				<Vector3 name="size"><X>8</X><Y>2</Y><Z>8</Z></Vector3>
+				<float name="Transparency">0</float>
+				<token name="shape">1</token>
+			</Properties>
+		</Item>
+
+	</Item>
+</roblox>

@@ -2,24 +2,56 @@ extends Node3D
 
 ## Main Stage Manager for Roblox 2017 Map Viewer
 
-@export var map_path: String = "res://maps/sample_2017_place.rbxl"
+@export var map_path: String = "res://maps/crossroads_2017.rbxl"
 
 @onready var map_root: Node3D = $MapRoot
 @onready var player: PlayerController = $PlayerCharacter
 @onready var joystick_hud: VirtualJoystickHUD = $CanvasLayer/VirtualJoystick
-@onready var status_label: Label = $CanvasLayer/DebugPanel/StatusLabel
+@onready var status_label: Label = $CanvasLayer/DebugPanel/VBoxContainer/StatusLabel
+@onready var map_option_button: OptionButton = $CanvasLayer/DebugPanel/VBoxContainer/HBoxContainer/MapOptionButton
+@onready var load_file_button: Button = $CanvasLayer/DebugPanel/VBoxContainer/HBoxContainer/LoadFileButton
+@onready var file_dialog: FileDialog = $CanvasLayer/FileDialog
 
 var parser: RBXLParser
 
+const MAP_PRESETS: Array[Dictionary] = [
+	{"name": "Classic Crossroads (2017)", "path": "res://maps/crossroads_2017.rbxl"},
+	{"name": "Obby & Playground", "path": "res://maps/sample_2017_place.rbxl"}
+]
+
 func _ready() -> void:
 	parser = RBXLParser.new()
+	
+	# Setup Map Selection OptionButton UI
+	if map_option_button:
+		map_option_button.clear()
+		for preset in MAP_PRESETS:
+			map_option_button.add_item(preset["name"])
+		map_option_button.item_selected.connect(_on_map_selected)
+
+	if load_file_button and file_dialog:
+		load_file_button.pressed.connect(_on_open_file_dialog_pressed)
+		file_dialog.file_selected.connect(_on_custom_file_selected)
+
 	load_map(map_path)
+
+func _on_map_selected(index: int) -> void:
+	if index >= 0 and index < MAP_PRESETS.size():
+		var selected_path: String = MAP_PRESETS[index]["path"]
+		load_map(selected_path)
+
+func _on_open_file_dialog_pressed() -> void:
+	if file_dialog:
+		file_dialog.popup_centered(Vector2i(800, 500))
+
+func _on_custom_file_selected(path: String) -> void:
+	load_map(path)
 
 func load_map(path: String) -> void:
 	if status_label:
 		status_label.text = "Loading Roblox Map: " + path.get_file()
 		
-	# Clear existing map nodes if re-loading
+	# Clear existing 3D map nodes
 	for child in map_root.get_children():
 		child.queue_free()
 
@@ -44,4 +76,4 @@ func load_map(path: String) -> void:
 		joystick_hud.set_player(player)
 
 	if status_label:
-		status_label.text = "Map Loaded | Parts: %d | Spawns: %d" % [parser.part_count, spawns.size()]
+		status_label.text = "Map Loaded: %s | Parts: %d | Spawns: %d" % [path.get_file(), parser.part_count, spawns.size()]

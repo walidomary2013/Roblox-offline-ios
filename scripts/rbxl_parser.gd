@@ -9,96 +9,6 @@ signal map_parsed(spawn_points: Array[Vector3], part_count: int)
 var spawn_locations: Array[Vector3] = []
 var part_count: int = 0
 
-const FALLBACK_2017_MAP_XML: String = """<roblox version="4">
-	<Item class="Workspace" referent="RBX0">
-		<Item class="Part" referent="RBX1">
-			<Properties>
-				<string name="Name">Baseplate</string>
-				<bool name="Anchored">true</bool>
-				<bool name="CanCollide">true</bool>
-				<int name="BrickColor">37</int>
-				<CoordinateFrame name="CFrame">
-					<X>0</X><Y>-1</Y><Z>0</Z>
-					<R00>1</R00><R01>0</R01><R02>0</R02>
-					<R10>0</R10><R11>1</R11><R12>0</R12>
-					<R20>0</R20><R21>0</R21><R22>1</R22>
-				</CoordinateFrame>
-				<Vector3 name="size"><X>256</X><Y>2</Y><Z>256</Z></Vector3>
-				<float name="Transparency">0</float>
-				<token name="shape">1</token>
-			</Properties>
-		</Item>
-		<Item class="SpawnLocation" referent="RBX2">
-			<Properties>
-				<string name="Name">SpawnLocation</string>
-				<bool name="Anchored">true</bool>
-				<bool name="CanCollide">true</bool>
-				<int name="BrickColor">1001</int>
-				<CoordinateFrame name="CFrame">
-					<X>0</X><Y>0.5</Y><Z>0</Z>
-					<R00>1</R00><R01>0</R01><R02>0</R02>
-					<R10>0</R10><R11>1</R11><R12>0</R12>
-					<R20>0</R20><R21>0</R21><R22>1</R22>
-				</CoordinateFrame>
-				<Vector3 name="size"><X>12</X><Y>1</Y><Z>12</Z></Vector3>
-				<float name="Transparency">0</float>
-				<token name="shape">1</token>
-			</Properties>
-		</Item>
-		<Item class="Part" referent="RBX3">
-			<Properties>
-				<string name="Name">BluePillar</string>
-				<bool name="Anchored">true</bool>
-				<bool name="CanCollide">true</bool>
-				<int name="BrickColor">23</int>
-				<CoordinateFrame name="CFrame">
-					<X>-20</X><Y>8</Y><Z>-20</Z>
-					<R00>1</R00><R01>0</R01><R02>0</R02>
-					<R10>0</R10><R11>1</R11><R12>0</R12>
-					<R20>0</R20><R21>0</R21><R22>1</R22>
-				</CoordinateFrame>
-				<Vector3 name="size"><X>4</X><Y>16</Y><Z>4</Z></Vector3>
-				<float name="Transparency">0</float>
-				<token name="shape">1</token>
-			</Properties>
-		</Item>
-		<Item class="WedgePart" referent="RBX4">
-			<Properties>
-				<string name="Name">RedRamp</string>
-				<bool name="Anchored">true</bool>
-				<bool name="CanCollide">true</bool>
-				<int name="BrickColor">21</int>
-				<CoordinateFrame name="CFrame">
-					<X>15</X><Y>4</Y><Z>-10</Z>
-					<R00>1</R00><R01>0</R01><R02>0</R02>
-					<R10>0</R10><R11>1</R11><R12>0</R12>
-					<R20>0</R20><R21>0</R21><R22>1</R22>
-				</CoordinateFrame>
-				<Vector3 name="size"><X>8</X><Y>8</Y><Z>16</Z></Vector3>
-				<float name="Transparency">0</float>
-				<token name="shape">1</token>
-			</Properties>
-		</Item>
-		<Item class="Part" referent="RBX5">
-			<Properties>
-				<string name="Name">YellowPlatform</string>
-				<bool name="Anchored">true</bool>
-				<bool name="CanCollide">true</bool>
-				<int name="BrickColor">24</int>
-				<CoordinateFrame name="CFrame">
-					<X>0</X><Y>3</Y><Z>-30</Z>
-					<R00>1</R00><R01>0</R01><R02>0</R02>
-					<R10>0</R10><R11>1</R11><R12>0</R12>
-					<R20>0</R20><R21>0</R21><R22>1</R22>
-				</CoordinateFrame>
-				<Vector3 name="size"><X>16</X><Y>6</Y><Z>16</Z></Vector3>
-				<float name="Transparency">0</float>
-				<token name="shape">2</token>
-			</Properties>
-		</Item>
-	</Item>
-</roblox>"""
-
 ## Parse an XML .rbxl file from a given path (e.g. "res://maps/sample_2017_place.rbxl")
 func parse_rbxl_file(file_path: String, parent_node: Node3D) -> Array[Vector3]:
 	if FileAccess.file_exists(file_path):
@@ -110,8 +20,8 @@ func parse_rbxl_file(file_path: String, parent_node: Node3D) -> Array[Vector3]:
 				print("[RBXLParser] Loading .rbxl file from disk: ", file_path)
 				return parse_rbxl_string(xml_content, parent_node)
 
-	print("[RBXLParser] File not found or unreadable in PCK (%s), loading embedded 2017 fallback map..." % file_path)
-	return parse_rbxl_string(FALLBACK_2017_MAP_XML, parent_node)
+	printerr("[RBXLParser] File not found or unreadable: ", file_path)
+	return spawn_locations
 
 ## Parse an XML .rbxl string buffer
 func parse_rbxl_string(xml_content: String, parent_node: Node3D) -> Array[Vector3]:
@@ -133,9 +43,9 @@ func parse_rbxl_string(xml_content: String, parent_node: Node3D) -> Array[Vector
 
 	while parser.read() == OK:
 		var node_type := parser.get_node_type()
-		var node_name := parser.get_node_name()
 
 		if node_type == XMLParser.NODE_ELEMENT:
+			var node_name := parser.get_node_name()
 			if node_name == "Item":
 				var item_class := parser.get_named_attribute_value_safe("class")
 				var new_item := {
@@ -188,6 +98,7 @@ func parse_rbxl_string(xml_content: String, parent_node: Node3D) -> Array[Vector
 							current_item[active_prop_name] = text_val.to_int()
 
 		elif node_type == XMLParser.NODE_ELEMENT_END:
+			var node_name := parser.get_node_name()
 			if node_name == "Properties":
 				in_properties = false
 			elif in_properties and item_stack.size() > 0:
