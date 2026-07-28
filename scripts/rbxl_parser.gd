@@ -111,7 +111,7 @@ func parse_rbxl_binary_buffer(buffer: PackedByteArray, parent_node: Node3D) -> A
 		var dec_len := stream.get_32()
 		var reserved := stream.get_32()
 		
-		if chunk_name == "END\x00" or chunk_name == "END":
+		if chunk_name.begins_with("END"):
 			break
 			
 		var chunk_bytes: PackedByteArray
