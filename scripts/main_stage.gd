@@ -3,6 +3,8 @@ extends Node3D
 
 ## Main Stage Controller with Novetus Standalone Engine Integration
 
+const NovetusLauncherScript = preload("res://scripts/novetus_launcher.gd")
+
 @export var map_path: String = "res://REAL.rbxlx"
 @export var map_root: Node3D
 @export var player: CharacterBody3D
@@ -13,7 +15,7 @@ extends Node3D
 @export var status_label: Label
 
 var parser: RBXLParser
-var novetus: NovetusLauncher
+var novetus: RefCounted
 
 const MAP_PRESETS: Array[Dictionary] = [
 	{"name": "Work at a Pizza Place (2017)", "path": "res://REAL.rbxlx"},
@@ -26,8 +28,9 @@ const MAP_PRESETS: Array[Dictionary] = [
 
 func _ready() -> void:
 	parser = RBXLParser.new()
-	novetus = NovetusLauncher.new()
-	novetus.client_launched.connect(_on_novetus_client_launched)
+	novetus = NovetusLauncherScript.new()
+	if novetus.has_signal("client_launched"):
+		novetus.client_launched.connect(_on_novetus_client_launched)
 	
 	if map_option_button:
 		map_option_button.clear()
@@ -87,11 +90,11 @@ func load_map(path: String) -> void:
 			joystick_hud.jump_pressed.connect(func(): player.request_jump())
 
 	# Launch Novetus Native Client Bridge
-	if novetus:
-		var v := NovetusLauncher.ClientVersion.CLIENT_2017_LATE
+	if novetus and novetus.has_method("launch_standalone_roblox_client"):
+		var v_enum_val = 3 # CLIENT_2017_LATE
 		if "2007" in path:
-			v = NovetusLauncher.ClientVersion.CLIENT_2007_MARCH
-		novetus.launch_standalone_roblox_client(path, v)
+			v_enum_val = 0 # CLIENT_2007_MARCH
+		novetus.launch_standalone_roblox_client(path, v_enum_val)
 
 func _on_novetus_client_launched(client_name: String, place_path: String) -> void:
 	print("[MainStage] Novetus Engine Bridge active for: ", client_name, " | ", place_path)
