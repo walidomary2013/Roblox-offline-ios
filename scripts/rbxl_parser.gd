@@ -107,7 +107,7 @@ func parse_rbxl_binary_buffer(buffer: PackedByteArray, parent_node: Node3D) -> A
 		var chunk_name := stream.get_string(4)
 		var cmp_len := stream.get_32()
 		var dec_len := stream.get_32()
-		var reserved := stream.get_32()
+		var _reserved := stream.get_32()
 		
 		if chunk_name.begins_with("END"):
 			break
@@ -172,16 +172,22 @@ func parse_rbxl_binary_buffer(buffer: PackedByteArray, parent_node: Node3D) -> A
 	return spawn_locations
 
 func _parse_chunk_inst(stream: StreamPeerBuffer, types: Dictionary, instances: Dictionary) -> void:
-	if stream.get_size() < 8: return
+	if stream.get_size() < 13: return
 	var type_id := stream.get_32()
 	var class_name_len := stream.get_32()
+	
+	var remaining := stream.get_size() - stream.get_position()
+	if class_name_len <= 0 or class_name_len > remaining:
+		return
+		
 	var target_class_name := stream.get_string(class_name_len)
-	var is_service := stream.get_8()
+	var _is_service := stream.get_8()
 	var inst_count := stream.get_32()
 	
 	var inst_ids: Array[int] = []
 	var prev_id := 0
 	for i in range(inst_count):
+		if stream.get_position() + 4 > stream.get_size(): break
 		var encoded := stream.get_32()
 		var val = (encoded >> 1) ^ -(encoded & 1)
 		prev_id += val
@@ -205,12 +211,13 @@ func _parse_chunk_inst(stream: StreamPeerBuffer, types: Dictionary, instances: D
 
 func _parse_chunk_prnt(stream: StreamPeerBuffer, parents: Dictionary) -> void:
 	if stream.get_size() < 5: return
-	var ver := stream.get_8()
+	var _ver := stream.get_8()
 	var link_count := stream.get_32()
 	
 	var child_ids: Array[int] = []
 	var prev_c := 0
 	for i in range(link_count):
+		if stream.get_position() + 4 > stream.get_size(): break
 		var encoded := stream.get_32()
 		var val = (encoded >> 1) ^ -(encoded & 1)
 		prev_c += val
@@ -219,6 +226,7 @@ func _parse_chunk_prnt(stream: StreamPeerBuffer, parents: Dictionary) -> void:
 	var parent_ids: Array[int] = []
 	var prev_p := 0
 	for i in range(link_count):
+		if stream.get_position() + 4 > stream.get_size(): break
 		var encoded := stream.get_32()
 		var val = (encoded >> 1) ^ -(encoded & 1)
 		prev_p += val
@@ -228,11 +236,16 @@ func _parse_chunk_prnt(stream: StreamPeerBuffer, parents: Dictionary) -> void:
 		parents[child_ids[i]] = parent_ids[i]
 
 func _parse_chunk_prop(stream: StreamPeerBuffer, types: Dictionary, instances: Dictionary) -> void:
-	if stream.get_size() < 6: return
+	if stream.get_size() < 9: return
 	var type_id := stream.get_32()
 	var prop_name_len := stream.get_32()
+	
+	var remaining := stream.get_size() - stream.get_position()
+	if prop_name_len <= 0 or prop_name_len > remaining:
+		return
+		
 	var prop_name := stream.get_string(prop_name_len)
-	var prop_type_byte := stream.get_8()
+	var _prop_type_byte := stream.get_8()
 	
 	if not types.has(type_id): return
 	var target_ids: Array = types[type_id]["ids"]
@@ -242,41 +255,51 @@ func _parse_chunk_prop(stream: StreamPeerBuffer, types: Dictionary, instances: D
 			var props: Dictionary = instances[id]["props"]
 			match prop_name:
 				"Name":
-					var str_len := stream.get_32()
-					props["Name"] = stream.get_string(str_len)
+					if stream.get_position() + 4 <= stream.get_size():
+						var str_len := stream.get_32()
+						if str_len > 0 and str_len <= stream.get_size() - stream.get_position():
+							props["Name"] = stream.get_string(str_len)
 				"Size", "size":
-					var x = stream.get_float()
-					var y = stream.get_float()
-					var z = stream.get_float()
-					props["Size"] = Vector3(x, y, z)
+					if stream.get_position() + 12 <= stream.get_size():
+						var x = stream.get_float()
+						var y = stream.get_float()
+						var z = stream.get_float()
+						props["Size"] = Vector3(x, y, z)
 				"Position", "position":
-					var px = stream.get_float()
-					var py = stream.get_float()
-					var pz = stream.get_float()
-					var pos = Vector3(px, py, pz)
-					props["Position"] = pos
-					props["CFrame"] = Transform3D(Basis(), pos)
+					if stream.get_position() + 12 <= stream.get_size():
+						var px = stream.get_float()
+						var py = stream.get_float()
+						var pz = stream.get_float()
+						var pos = Vector3(px, py, pz)
+						props["Position"] = pos
+						props["CFrame"] = Transform3D(Basis(), pos)
 				"CFrame", "cframe":
-					var rx_id = stream.get_8()
-					var px = stream.get_float()
-					var py = stream.get_float()
-					var pz = stream.get_float()
-					var basis: Basis = Basis()
-					if rx_id >= 0 and rx_id < CFRAME_ROTATION_LOOKUP.size():
-						basis = CFRAME_ROTATION_LOOKUP[rx_id]
-					props["CFrame"] = Transform3D(basis, Vector3(px, py, pz))
+					if stream.get_position() + 13 <= stream.get_size():
+						var rx_id = stream.get_8()
+						var px = stream.get_float()
+						var py = stream.get_float()
+						var pz = stream.get_float()
+						var basis: Basis = Basis()
+						if rx_id >= 0 and rx_id < CFRAME_ROTATION_LOOKUP.size():
+							basis = CFRAME_ROTATION_LOOKUP[rx_id]
+						props["CFrame"] = Transform3D(basis, Vector3(px, py, pz))
 				"BrickColor", "brickColor":
-					props["BrickColor"] = stream.get_32()
+					if stream.get_position() + 4 <= stream.get_size():
+						props["BrickColor"] = stream.get_32()
 				"Color3uint":
-					var c_int = stream.get_32()
-					props["Color3"] = BrickColorDB.parse_color3_uint(c_int)
-					props["HasColor3"] = true
+					if stream.get_position() + 4 <= stream.get_size():
+						var c_int = stream.get_32()
+						props["Color3"] = BrickColorDB.parse_color3_uint(c_int)
+						props["HasColor3"] = true
 				"Transparency", "transparency":
-					props["Transparency"] = stream.get_float()
+					if stream.get_position() + 4 <= stream.get_size():
+						props["Transparency"] = stream.get_float()
 				"CanCollide", "canCollide":
-					props["CanCollide"] = (stream.get_8() != 0)
+					if stream.get_position() + 1 <= stream.get_size():
+						props["CanCollide"] = (stream.get_8() != 0)
 				"Shape", "shape":
-					props["Shape"] = stream.get_8()
+					if stream.get_position() + 1 <= stream.get_size():
+						props["Shape"] = stream.get_8()
 
 ## ====================================================================
 ## ROBLOX XML PARSER (.rbxl XML Format)
