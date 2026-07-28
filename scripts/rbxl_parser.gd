@@ -2,8 +2,7 @@ class_name RBXLParser
 extends RefCounted
 
 ## Full OpenBLOX-Grade Roblox .rbxl (Binary + XML) Parser for Godot 4
-## Parses both Roblox Binary (.rbxl binary format v0/v1) and Roblox XML formats.
-## Renders hundreds/thousands of 3D parts, models, spawns, materials, meshes, and colors.
+## Adapted directly from OpenBLOX (https://github.com/EGAMatsu/OpenBLOX/blob/main/C_Engine/rbxl.h)
 
 signal map_parsed(spawn_points: Array[Vector3], part_count: int)
 
@@ -16,7 +15,6 @@ const VALID_3D_CLASSES: Array[String] = [
 	"UnionOperation", "FlagStand", "Platform"
 ]
 
-## Standard 24 Roblox Binary CFrame Rotation Matrices (Rotation IDs 0..23)
 const CFRAME_ROTATION_LOOKUP: Array[Basis] = [
 	Basis(Vector3(1,0,0), Vector3(0,1,0), Vector3(0,0,1)),
 	Basis(Vector3(1,0,0), Vector3(0,0,-1), Vector3(0,1,0)),
@@ -44,7 +42,7 @@ const CFRAME_ROTATION_LOOKUP: Array[Basis] = [
 	Basis(Vector3(0,0,-1), Vector3(0,-1,0), Vector3(-1,0,0))
 ]
 
-## Entry Point: Parse an XML or Binary .rbxl file from disk
+## Entry Point
 func parse_rbxl_file(file_path: String, parent_node: Node3D) -> Array[Vector3]:
 	spawn_locations.clear()
 	part_count = 0
@@ -67,23 +65,186 @@ func parse_rbxl_file(file_path: String, parent_node: Node3D) -> Array[Vector3]:
 	var buffer := file.get_buffer(length)
 	file.close()
 
-	# Check header bytes to detect XML vs Binary format
 	if buffer.size() >= 8 and buffer[0] == 0x3C and buffer[1] == 0x72 and buffer[2] == 0x6F and buffer[3] == 0x62 and buffer[4] == 0x6C and buffer[5] == 0x6F and buffer[6] == 0x78 and buffer[7] == 0x21:
-		print("[RBXLParser] Detected Roblox Binary Place (.rbxl binary format): ", file_path)
+		print("[RBXLParser] Detected Roblox Binary Place: ", file_path)
 		return parse_rbxl_binary_buffer(buffer, parent_node)
 	elif buffer.size() > 0 and buffer[0] == 0x89:
-		print("[RBXLParser] Detected Compressed Binary Place stream: ", file_path)
+		print("[RBXLParser] Detected Compressed Binary Stream: ", file_path)
 		return parse_rbxl_binary_buffer(buffer, parent_node)
 	else:
-		# XML Format
 		var xml_str := buffer.get_string_from_utf8()
 		if xml_str == "":
 			xml_str = buffer.get_string_from_ascii()
-		print("[RBXLParser] Detected Roblox XML Place format: ", file_path)
+		print("[RBXLParser] Detected Roblox XML Place: ", file_path)
 		return parse_rbxl_string(xml_str, parent_node)
 
 ## ====================================================================
-## ROBLOX BINARY PARSER (.rbxl binary format v0/v1 LZ4/Raw Stream)
+## OPENBLOX RECURSIVE DOM XML PARSER
+## ====================================================================
+class XMLNode:
+	var name: String = ""
+	var attributes: Dictionary = {}
+	var content: String = ""
+	var children: Array = []
+
+func _build_xml_dom(xml_content: String) -> XMLNode:
+	var parser := XMLParser.new()
+	var err := parser.open_buffer(xml_content.to_utf8_buffer())
+	if err != OK: return null
+
+	var root := XMLNode.new()
+	root.name = "root"
+	var stack: Array[XMLNode] = [root]
+	var current_text := ""
+
+	while parser.read() == OK:
+		var ntype := parser.get_node_type()
+		if ntype == XMLParser.NODE_ELEMENT:
+			var nname := parser.get_node_name()
+			var new_node := XMLNode.new()
+			new_node.name = nname
+			for i in range(parser.get_attribute_count()):
+				new_node.attributes[parser.get_attribute_name(i)] = parser.get_attribute_value(i)
+			
+			stack[-1].children.append(new_node)
+			stack.append(new_node)
+			current_text = ""
+		elif ntype == XMLParser.NODE_TEXT:
+			current_text += parser.get_node_data()
+		elif ntype == XMLParser.NODE_ELEMENT_END:
+			if stack.size() > 1:
+				var closing_node = stack.pop_back()
+				closing_node.content = current_text.strip_edges()
+			current_text = ""
+
+	return root
+
+func parse_rbxl_string(xml_content: String, parent_node: Node3D) -> Array[Vector3]:
+	spawn_locations.clear()
+	part_count = 0
+
+	var root_dom := _build_xml_dom(xml_content)
+	if not root_dom:
+		printerr("[RBXLParser] Failed to build XML DOM tree.")
+		return spawn_locations
+
+	# Locate top level <roblox> or <roblox version="4"> node
+	var roblox_node: XMLNode = null
+	for child in root_dom.children:
+		if child.name == "roblox":
+			roblox_node = child
+			break
+
+	if not roblox_node:
+		roblox_node = root_dom
+
+	# Process all top-level Item instances recursively using OpenBLOX algorithm
+	for child in roblox_node.children:
+		if child.name == "Item":
+			_openblox_load_item(child, parent_node)
+
+	print("[RBXLParser] OpenBLOX XML Engine loaded %d parts and %d spawns." % [part_count, spawn_locations.size()])
+	map_parsed.emit(spawn_locations, part_count)
+	return spawn_locations
+
+func _openblox_load_item(item_node: XMLNode, parent_3d_node: Node3D) -> void:
+	var item_class: String = item_node.attributes.get("class", "Part")
+	var props := {
+		"class": item_class,
+		"Name": item_class,
+		"Position": Vector3.ZERO,
+		"Size": Vector3(4, 1.2, 2),
+		"CFrame": Transform3D.IDENTITY,
+		"BrickColor": 194,
+		"Color3": Color(0.64, 0.64, 0.64),
+		"HasColor3": false,
+		"Transparency": 0.0,
+		"CanCollide": true,
+		"Shape": 1
+	}
+
+	var created_3d_parent: Node3D = parent_3d_node
+
+	# Parse <Properties> child node if present
+	for child in item_node.children:
+		if child.name == "Properties":
+			_parse_openblox_properties(child, props)
+			break
+
+	# Instantiate 3D part if valid 3D class
+	if item_class in VALID_3D_CLASSES:
+		var instantiated := _instantiate_part_node(props, parent_3d_node)
+		if instantiated:
+			created_3d_parent = instantiated
+
+	# Recursively process all child <Item> nodes (OpenBLOX loadModelPartXML)
+	for child in item_node.children:
+		if child.name == "Item":
+			_openblox_load_item(child, created_3d_parent)
+
+func _parse_openblox_properties(properties_node: XMLNode, props: Dictionary) -> void:
+	for prop_node in properties_node.children:
+		var prop_name: String = prop_node.attributes.get("name", "")
+		if prop_name == "": continue
+
+		var prop_type: String = prop_node.name
+
+		match prop_type:
+			"string":
+				props[prop_name] = prop_node.content
+			"int", "int64":
+				props[prop_name] = prop_node.content.to_int()
+			"float", "double":
+				props[prop_name] = prop_node.content.to_float()
+			"bool":
+				props[prop_name] = (prop_node.content.to_lower() == "true")
+			"token":
+				props[prop_name] = prop_node.content.to_int()
+			"Color3uint":
+				props["Color3"] = BrickColorDB.parse_color3_uint(prop_node.content.to_int())
+				props["HasColor3"] = true
+			"Vector3", "Vector3int16":
+				var vec := Vector3.ZERO
+				for sub in prop_node.children:
+					if sub.name == "X": vec.x = sub.content.to_float()
+					elif sub.name == "Y": vec.y = sub.content.to_float()
+					elif sub.name == "Z": vec.z = sub.content.to_float()
+				if prop_name in ["size", "Size"]:
+					props["Size"] = vec
+				elif prop_name in ["Position", "position"]:
+					props["Position"] = vec
+					props["CFrame"] = Transform3D(Basis(), vec)
+			"CoordinateFrame", "CFrame":
+				var pos := Vector3.ZERO
+				var r00:=1.0; var r01:=0.0; var r02:=0.0
+				var r10:=0.0; var r11:=1.0; var r12:=0.0
+				var r20:=0.0; var r21:=0.0; var r22:=1.0
+				for sub in prop_node.children:
+					match sub.name:
+						"X": pos.x = sub.content.to_float()
+						"Y": pos.y = sub.content.to_float()
+						"Z": pos.z = sub.content.to_float()
+						"R00": r00 = sub.content.to_float()
+						"R01": r01 = sub.content.to_float()
+						"R02": r02 = sub.content.to_float()
+						"R10": r10 = sub.content.to_float()
+						"R11": r11 = sub.content.to_float()
+						"R12": r12 = sub.content.to_float()
+						"R20": r20 = sub.content.to_float()
+						"R21": r21 = sub.content.to_float()
+						"R22": r22 = sub.content.to_float()
+				props["CFrame"] = CFrameHelper.create_transform(pos.x, pos.y, pos.z, r00, r01, r02, r10, r11, r12, r20, r21, r22)
+			"Color3":
+				var col := Color.GRAY
+				for sub in prop_node.children:
+					if sub.name == "R": col.r = sub.content.to_float()
+					elif sub.name == "G": col.g = sub.content.to_float()
+					elif sub.name == "B": col.b = sub.content.to_float()
+				props["Color3"] = col
+				props["HasColor3"] = true
+
+## ====================================================================
+## ROBLOX BINARY PARSER
 ## ====================================================================
 func parse_rbxl_binary_buffer(buffer: PackedByteArray, parent_node: Node3D) -> Array[Vector3]:
 	spawn_locations.clear()
@@ -299,147 +460,7 @@ func _parse_chunk_prop(stream: StreamPeerBuffer, types: Dictionary, instances: D
 					if stream.get_position() + 1 <= stream.get_size():
 						props["Shape"] = stream.get_8()
 
-## ====================================================================
-## ROBLOX XML PARSER (.rbxl XML Format)
-## ====================================================================
-func parse_rbxl_string(xml_content: String, parent_node: Node3D) -> Array[Vector3]:
-	spawn_locations.clear()
-	part_count = 0
-	
-	var parser := XMLParser.new()
-	var err := parser.open_buffer(xml_content.to_utf8_buffer())
-	if err != OK:
-		printerr("[RBXLParser] Failed to open XML string buffer: ", err)
-		return spawn_locations
-
-	var item_stack: Array[Dictionary] = []
-	var in_properties := false
-	var active_prop_name := ""
-	var active_prop_type := ""
-	var current_sub_tag := ""
-	var sub_values := {}
-
-	while parser.read() == OK:
-		var node_type := parser.get_node_type()
-
-		if node_type == XMLParser.NODE_ELEMENT:
-			var node_name := parser.get_node_name()
-			if node_name == "Item":
-				var item_class := parser.get_named_attribute_value_safe("class")
-				var new_item := {
-					"class": item_class,
-					"Name": item_class,
-					"Position": Vector3.ZERO,
-					"Size": Vector3(4, 1.2, 2),
-					"CFrame": Transform3D.IDENTITY,
-					"BrickColor": 194,
-					"Color3": Color(0.64, 0.64, 0.64),
-					"HasColor3": false,
-					"Transparency": 0.0,
-					"Reflectance": 0.0,
-					"CanCollide": true,
-					"Shape": 1
-				}
-				item_stack.append(new_item)
-			elif node_name == "Properties":
-				in_properties = true
-			elif in_properties and item_stack.size() > 0:
-				var name_attr := parser.get_named_attribute_value_safe("name")
-				if name_attr != "":
-					active_prop_name = name_attr
-					active_prop_type = node_name
-					sub_values.clear()
-				else:
-					current_sub_tag = node_name
-
-		elif node_type == XMLParser.NODE_TEXT and in_properties and item_stack.size() > 0:
-			var text_val := parser.get_node_data().strip_edges()
-			if text_val != "":
-				var current_item: Dictionary = item_stack[-1]
-				if current_sub_tag != "" and current_sub_tag in ["X", "Y", "Z", "R00", "R01", "R02", "R10", "R11", "R12", "R20", "R21", "R22", "R", "G", "B"]:
-					sub_values[current_sub_tag] = text_val.to_float()
-				else:
-					match active_prop_type:
-						"string":
-							current_item[active_prop_name] = text_val
-						"int", "int64":
-							current_item[active_prop_name] = text_val.to_int()
-						"float", "double":
-							current_item[active_prop_name] = text_val.to_float()
-						"bool":
-							current_item[active_prop_name] = (text_val.to_lower() == "true")
-						"Color3uint":
-							var col_int = text_val.to_int()
-							current_item["Color3"] = BrickColorDB.parse_color3_uint(col_int)
-							current_item["HasColor3"] = true
-						"token":
-							current_item[active_prop_name] = text_val.to_int()
-
-		elif node_type == XMLParser.NODE_ELEMENT_END:
-			var node_name := parser.get_node_name()
-			if node_name == "Properties":
-				in_properties = false
-			elif in_properties and item_stack.size() > 0:
-				var current_item: Dictionary = item_stack[-1]
-				
-				if node_name in ["Vector3", "Vector3int16"]:
-					if active_prop_name in ["size", "Size"]:
-						current_item["Size"] = Vector3(
-							sub_values.get("X", 4.0),
-							sub_values.get("Y", 1.2),
-							sub_values.get("Z", 2.0)
-						)
-					elif active_prop_name in ["Position", "position"]:
-						var pos = Vector3(
-							sub_values.get("X", 0.0),
-							sub_values.get("Y", 0.0),
-							sub_values.get("Z", 0.0)
-						)
-						current_item["Position"] = pos
-						current_item["CFrame"] = Transform3D(Basis(), pos)
-						
-				elif node_name in ["CoordinateFrame", "CFrame"]:
-					var pos = Vector3(sub_values.get("X", 0.0), sub_values.get("Y", 0.0), sub_values.get("Z", 0.0))
-					var r00 = sub_values.get("R00", 1.0)
-					var r01 = sub_values.get("R01", 0.0)
-					var r02 = sub_values.get("R02", 0.0)
-					var r10 = sub_values.get("R10", 0.0)
-					var r11 = sub_values.get("R11", 1.0)
-					var r12 = sub_values.get("R12", 0.0)
-					var r20 = sub_values.get("R20", 0.0)
-					var r21 = sub_values.get("R21", 0.0)
-					var r22 = sub_values.get("R22", 1.0)
-					
-					current_item["CFrame"] = CFrameHelper.create_transform(
-						pos.x, pos.y, pos.z,
-						r00, r01, r02,
-						r10, r11, r12,
-						r20, r21, r22
-					)
-					
-				elif node_name == "Color3":
-					if sub_values.has("R") and sub_values.has("G") and sub_values.has("B"):
-						current_item["Color3"] = Color(sub_values["R"], sub_values["G"], sub_values["B"])
-						current_item["HasColor3"] = true
-
-				current_sub_tag = ""
-
-			elif node_name == "Item" and item_stack.size() > 0:
-				var item_to_instantiate: Dictionary = item_stack.pop_back()
-				var item_class: String = item_to_instantiate.get("class", "")
-				if item_class in VALID_3D_CLASSES:
-					_instantiate_part_node(item_to_instantiate, parent_node)
-				elif item_stack.size() > 0:
-					# If sub-item (like SpecialMesh / Decal / Weld), attach to parent 3D Part
-					var parent_item: Dictionary = item_stack[-1]
-					if item_class == "SpecialMesh":
-						parent_item["Mesh"] = item_to_instantiate
-
-	print("[RBXLParser] OpenBLOX XML Parsed successfully. Total Parts: ", part_count, ", Spawns found: ", spawn_locations.size())
-	map_parsed.emit(spawn_locations, part_count)
-	return spawn_locations
-
-func _instantiate_part_node(props: Dictionary, parent: Node3D) -> void:
+func _instantiate_part_node(props: Dictionary, parent: Node3D) -> Node3D:
 	var item_class: String = props.get("class", "Part")
 	var size: Vector3 = props.get("Size", Vector3(4, 1.2, 2))
 	var xform: Transform3D = props.get("CFrame", Transform3D.IDENTITY)
@@ -454,7 +475,7 @@ func _instantiate_part_node(props: Dictionary, parent: Node3D) -> void:
 		color = BrickColorDB.get_color(brick_color_id)
 		
 	if transparency >= 1.0 and not can_collide:
-		return
+		return null
 
 	var static_body := StaticBody3D.new()
 	static_body.name = str(props.get("Name", item_class)) + "_" + str(part_count)
@@ -539,3 +560,4 @@ func _instantiate_part_node(props: Dictionary, parent: Node3D) -> void:
 
 	parent.add_child(static_body)
 	part_count += 1
+	return static_body
