@@ -24,24 +24,23 @@ func parse_rbxl_file(file_path: String, parent_node: Node3D) -> Array[Vector3]:
 		printerr("[RBXLParser] Failed to open XML file: ", err)
 		return spawn_locations
 
-	var current_item_class := ""
-	var current_properties := {}
+	var item_stack: Array[Dictionary] = []
 	var in_properties := false
-	var current_prop_name := ""
-	var current_prop_type := ""
+	var active_prop_name := ""
+	var active_prop_type := ""
+	var current_sub_tag := ""
 	var sub_values := {}
 
 	while parser.read() == OK:
 		var node_type := parser.get_node_type()
+		var node_name := parser.get_node_name()
 
 		if node_type == XMLParser.NODE_ELEMENT:
-			var name := parser.get_node_name()
-			
-			if name == "Item":
-				current_item_class = parser.get_named_attribute_value_safe("class")
-				current_properties = {
-					"class": current_item_class,
-					"Name": current_item_class,
+			if node_name == "Item":
+				var item_class := parser.get_named_attribute_value_safe("class")
+				var new_item := {
+					"class": item_class,
+					"Name": item_class,
 					"Position": Vector3.ZERO,
 					"Size": Vector3(4, 1.2, 2),
 					"CFrame": Transform3D.IDENTITY,
@@ -51,78 +50,87 @@ func parse_rbxl_file(file_path: String, parent_node: Node3D) -> Array[Vector3]:
 					"Transparency": 0.0,
 					"Reflectance": 0.0,
 					"CanCollide": true,
-					"Shape": 1 # 1 = Block, 0 = Ball, 2 = Cylinder
+					"Shape": 1
 				}
-			elif name == "Properties":
+				item_stack.append(new_item)
+			elif node_name == "Properties":
 				in_properties = true
-			elif in_properties:
-				current_prop_type = name
-				current_prop_name = parser.get_named_attribute_value_safe("name")
-				sub_values.clear()
-				
-		elif node_type == XMLParser.NODE_TEXT and in_properties:
+			elif in_properties and item_stack.size() > 0:
+				var name_attr := parser.get_named_attribute_value_safe("name")
+				if name_attr != "":
+					active_prop_name = name_attr
+					active_prop_type = node_name
+					sub_values.clear()
+				else:
+					current_sub_tag = node_name
+
+		elif node_type == XMLParser.NODE_TEXT and in_properties and item_stack.size() > 0:
 			var text_val := parser.get_node_data().strip_edges()
 			if text_val != "":
-				if current_prop_type in ["X", "Y", "Z", "R00", "R01", "R02", "R10", "R11", "R12", "R20", "R21", "R22"]:
-					sub_values[current_prop_type] = text_val.to_float()
+				var current_item: Dictionary = item_stack[-1]
+				if current_sub_tag != "" and current_sub_tag in ["X", "Y", "Z", "R00", "R01", "R02", "R10", "R11", "R12", "R20", "R21", "R22"]:
+					sub_values[current_sub_tag] = text_val.to_float()
 				else:
-					match current_prop_type:
+					match active_prop_type:
 						"string":
-							current_properties[current_prop_name] = text_val
+							current_item[active_prop_name] = text_val
 						"int", "int64":
-							current_properties[current_prop_name] = text_val.to_int()
+							current_item[active_prop_name] = text_val.to_int()
 						"float", "double":
-							current_properties[current_prop_name] = text_val.to_float()
+							current_item[active_prop_name] = text_val.to_float()
 						"bool":
-							current_properties[current_prop_name] = (text_val.to_lower() == "true")
+							current_item[active_prop_name] = (text_val.to_lower() == "true")
 						"Color3uint":
 							var col_int = text_val.to_int()
-							current_properties["Color3"] = BrickColorDB.parse_color3_uint(col_int)
-							current_properties["HasColor3"] = true
+							current_item["Color3"] = BrickColorDB.parse_color3_uint(col_int)
+							current_item["HasColor3"] = true
 						"token":
-							current_properties[current_prop_name] = text_val.to_int()
-							
+							current_item[active_prop_name] = text_val.to_int()
+
 		elif node_type == XMLParser.NODE_ELEMENT_END:
-			var end_name := parser.get_node_name()
-			
-			if end_name in ["Vector3", "Vector3int16"]:
-				if current_prop_name in ["size", "Size"]:
-					current_properties["Size"] = Vector3(
-						sub_values.get("X", 4.0),
-						sub_values.get("Y", 1.2),
-						sub_values.get("Z", 2.0)
-					)
-				elif current_prop_name in ["Position", "position"]:
-					current_properties["Position"] = Vector3(
-						sub_values.get("X", 0.0),
-						sub_values.get("Y", 0.0),
-						sub_values.get("Z", 0.0)
-					)
-			elif end_name == "CoordinateFrame":
-				if sub_values.has("X") and sub_values.has("Y") and sub_values.has("Z"):
-					var pos = Vector3(sub_values["X"], sub_values["Y"], sub_values["Z"])
-					var r00 = sub_values.get("R00", 1.0)
-					var r01 = sub_values.get("R01", 0.0)
-					var r02 = sub_values.get("R02", 0.0)
-					var r10 = sub_values.get("R10", 0.0)
-					var r11 = sub_values.get("R11", 1.0)
-					var r12 = sub_values.get("R12", 0.0)
-					var r20 = sub_values.get("R20", 0.0)
-					var r21 = sub_values.get("R21", 0.0)
-					var r22 = sub_values.get("R22", 1.0)
-					
-					current_properties["CFrame"] = CFrameHelper.create_transform(
-						pos.x, pos.y, pos.z,
-						r00, r01, r02,
-						r10, r11, r12,
-						r20, r21, r22
-					)
-			elif end_name == "Properties":
+			if node_name == "Properties":
 				in_properties = false
-			elif end_name == "Item":
-				if current_item_class in ["Part", "WedgePart", "CornerWedgePart", "SpawnLocation", "TrussPart"]:
-					_instantiate_part_node(current_properties, parent_node)
-				current_item_class = ""
+			elif in_properties and item_stack.size() > 0:
+				var current_item: Dictionary = item_stack[-1]
+				if node_name in ["Vector3", "Vector3int16"]:
+					if active_prop_name in ["size", "Size"]:
+						current_item["Size"] = Vector3(
+							sub_values.get("X", 4.0),
+							sub_values.get("Y", 1.2),
+							sub_values.get("Z", 2.0)
+						)
+					elif active_prop_name in ["Position", "position"]:
+						current_item["Position"] = Vector3(
+							sub_values.get("X", 0.0),
+							sub_values.get("Y", 0.0),
+							sub_values.get("Z", 0.0)
+						)
+				elif node_name == "CoordinateFrame":
+					if sub_values.has("X") and sub_values.has("Y") and sub_values.has("Z"):
+						var pos = Vector3(sub_values["X"], sub_values["Y"], sub_values["Z"])
+						var r00 = sub_values.get("R00", 1.0)
+						var r01 = sub_values.get("R01", 0.0)
+						var r02 = sub_values.get("R02", 0.0)
+						var r10 = sub_values.get("R10", 0.0)
+						var r11 = sub_values.get("R11", 1.0)
+						var r12 = sub_values.get("R12", 0.0)
+						var r20 = sub_values.get("R20", 0.0)
+						var r21 = sub_values.get("R21", 0.0)
+						var r22 = sub_values.get("R22", 1.0)
+						
+						current_item["CFrame"] = CFrameHelper.create_transform(
+							pos.x, pos.y, pos.z,
+							r00, r01, r02,
+							r10, r11, r12,
+							r20, r21, r22
+						)
+				current_sub_tag = ""
+
+			elif node_name == "Item" and item_stack.size() > 0:
+				var item_to_instantiate: Dictionary = item_stack.pop_back()
+				var item_class: String = item_to_instantiate.get("class", "")
+				if item_class in ["Part", "WedgePart", "CornerWedgePart", "SpawnLocation", "TrussPart"]:
+					_instantiate_part_node(item_to_instantiate, parent_node)
 
 	print("[RBXLParser] Parsed successfully. Total Parts: ", part_count, ", Spawns found: ", spawn_locations.size())
 	map_parsed.emit(spawn_locations, part_count)
@@ -143,7 +151,7 @@ func _instantiate_part_node(props: Dictionary, parent: Node3D) -> void:
 		var brick_color_id: int = props.get("BrickColor", 194)
 		color = BrickColorDB.get_color(brick_color_id)
 		
-	# Skip completely transparent non-collidable parts (e.g. invisible touch zones)
+	# Skip completely transparent non-collidable parts
 	if transparency >= 1.0 and not can_collide:
 		return
 
@@ -167,7 +175,7 @@ func _instantiate_part_node(props: Dictionary, parent: Node3D) -> void:
 	if item_class == "WedgePart":
 		var prism := PrismMesh.new()
 		prism.size = size
-		prism.left_to_right = 0.0 # Creates right-angled wedge
+		prism.left_to_right = 0.0
 		mesh = prism
 		
 		var box_shape := BoxShape3D.new()
@@ -182,11 +190,10 @@ func _instantiate_part_node(props: Dictionary, parent: Node3D) -> void:
 		box_shape.size = size
 		shape = box_shape
 		
-		# Record spawn position (top of spawn platform)
+		# Record spawn position
 		var spawn_pos = xform.origin + Vector3(0, size.y * 0.5 + 2.0, 0)
 		spawn_locations.append(spawn_pos)
 		
-		# Give spawn platform a subtle emission glow
 		material.emission_enabled = true
 		material.emission = color * 0.3
 	else:
@@ -221,14 +228,14 @@ func _instantiate_part_node(props: Dictionary, parent: Node3D) -> void:
 				box_shape.size = size
 				shape = box_shape
 
-	# Attach MeshInstance3D if not completely transparent
+	# Attach MeshInstance3D
 	if transparency < 1.0 and mesh != null:
 		var mesh_instance := MeshInstance3D.new()
 		mesh_instance.mesh = mesh
 		mesh_instance.material_override = material
 		static_body.add_child(mesh_instance)
 
-	# Attach CollisionShape3D if collidable
+	# Attach CollisionShape3D
 	if can_collide and shape != null:
 		var col_shape := CollisionShape3D.new()
 		col_shape.shape = shape
