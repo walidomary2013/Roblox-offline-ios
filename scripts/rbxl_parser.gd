@@ -3,7 +3,7 @@ extends RefCounted
 
 ## Full OpenBLOX-Grade Roblox .rbxl (Binary + XML) Parser for Godot 4
 ## Parses both Roblox Binary (.rbxl binary format v0/v1) and Roblox XML formats.
-## Renders hundreds/thousands of 3D parts, models, spawns, materials, and colors.
+## Renders hundreds/thousands of 3D parts, models, spawns, materials, meshes, and colors.
 
 signal map_parsed(spawn_points: Array[Vector3], part_count: int)
 
@@ -102,7 +102,6 @@ func parse_rbxl_binary_buffer(buffer: PackedByteArray, parent_node: Node3D) -> A
 	var all_instances: Dictionary = {}
 	var parents: Dictionary = {}
 	
-	# Read Chunks (INST, PROP, PRNT, END)
 	while stream.get_position() < stream.get_size() - 8:
 		var chunk_name := stream.get_string(4)
 		var cmp_len := stream.get_32()
@@ -137,7 +136,6 @@ func parse_rbxl_binary_buffer(buffer: PackedByteArray, parent_node: Node3D) -> A
 			"PROP":
 				_parse_chunk_prop(chunk_stream, instance_types, all_instances)
 
-	# Instantiate all 3D Parts & Spawns
 	for inst_id in all_instances.keys():
 		var inst: Dictionary = all_instances[inst_id]
 		var item_class: String = inst.get("class", "")
@@ -431,6 +429,11 @@ func parse_rbxl_string(xml_content: String, parent_node: Node3D) -> Array[Vector
 				var item_class: String = item_to_instantiate.get("class", "")
 				if item_class in VALID_3D_CLASSES:
 					_instantiate_part_node(item_to_instantiate, parent_node)
+				elif item_stack.size() > 0:
+					# If sub-item (like SpecialMesh / Decal / Weld), attach to parent 3D Part
+					var parent_item: Dictionary = item_stack[-1]
+					if item_class == "SpecialMesh":
+						parent_item["Mesh"] = item_to_instantiate
 
 	print("[RBXLParser] OpenBLOX XML Parsed successfully. Total Parts: ", part_count, ", Spawns found: ", spawn_locations.size())
 	map_parsed.emit(spawn_locations, part_count)
