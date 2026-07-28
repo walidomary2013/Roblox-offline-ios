@@ -64,10 +64,12 @@ func load_map(path: String) -> void:
 	var spawns: Array[Vector3] = parser.parse_rbxl_file(path, map_root)
 	
 	# Instantiate default Roblox Environment & Skybox if map did not specify custom Lighting
+	const RobloxEnvScript = preload("res://scripts/roblox_environment.gd")
 	if not map_root.has_node("RobloxEnvironment"):
-		var env_node := RobloxEnvironment.new()
+		var env_node = RobloxEnvScript.new()
 		env_node.name = "RobloxEnvironment"
 		map_root.add_child(env_node)
+
 
 	
 	# Determine spawn position

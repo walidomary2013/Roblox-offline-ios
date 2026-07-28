@@ -180,11 +180,14 @@ func _openblox_load_item(item_node: XMLNode, parent_3d_node: Node3D) -> void:
 			_parse_openblox_properties(child, props)
 			break
 
+const RobloxEnvScript = preload("res://scripts/roblox_environment.gd")
+
 	if item_class == "Lighting":
-		var env_node: RobloxEnvironment = RobloxEnvironment.new()
+		var env_node = RobloxEnvScript.new()
 		env_node.name = "RobloxEnvironment"
 		parent_3d_node.add_child(env_node)
 		env_node.update_lighting_from_properties(props)
+
 
 	if item_class in ["Script", "LocalScript"]:
 		var script_source := ""

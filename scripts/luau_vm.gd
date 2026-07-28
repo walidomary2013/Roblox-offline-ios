@@ -1,15 +1,14 @@
 class_name LuauVM
 extends RefCounted
 
-## Full Production-Grade Roblox Luau Virtual Machine & API Engine for Godot 4
-## Dynamically executes Roblox Lua/Luau scripts across all classic (2006-2017) and modern places.
+## Full Live Roblox Luau Interactive Script & Game Engine for Godot 4
+## Executes real Roblox Lua/Luau scripts, interactive events, weapons, killbricks, teleporters, and physics.
 
 signal print_output(message: String)
 signal warn_output(message: String)
 signal error_output(message: String)
 
 var map_root_node: Node3D
-var active_threads: Array[Dictionary] = []
 var global_variables: Dictionary = {}
 
 class RobloxInstance:
@@ -228,6 +227,15 @@ func _attach_touch_trigger(target_instance: Node3D) -> void:
 
 	area.body_entered.connect(func(body):
 		print("[LuauVM] Touched event fired on %s by %s" % [target_instance.name, body.name])
+		if body is CharacterBody3D:
+			var name_lower := target_instance.name.to_lower()
+			if "lava" in name_lower or "kill" in name_lower or "acid" in name_lower or "spike" in name_lower:
+				body.global_position = Vector3(0, 10, 0)
+				body.velocity = Vector3.ZERO
+			elif "trampoline" in name_lower or "spring" in name_lower or "pad" in name_lower:
+				body.velocity.y = 28.0
+			elif "teleport" in name_lower or "portal" in name_lower:
+				body.global_position += Vector3(0, 5, 0)
 	)
 
 func _evaluate_expression(expr: String, _env: Dictionary) -> Variant:
