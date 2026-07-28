@@ -68,7 +68,6 @@ func parse_rbxl_file(file_path: String, parent_node: Node3D) -> Array[Vector3]:
 	file.close()
 
 	# Check header bytes to detect XML vs Binary format
-	# Binary header starts with "<roblox!" (0x3C 0x72 0x6F 0x62 0x6C 0x6F 0x78 0x21) or 0x89
 	if buffer.size() >= 8 and buffer[0] == 0x3C and buffer[1] == 0x72 and buffer[2] == 0x6F and buffer[3] == 0x62 and buffer[4] == 0x6C and buffer[5] == 0x6F and buffer[6] == 0x78 and buffer[7] == 0x21:
 		print("[RBXLParser] Detected Roblox Binary Place (.rbxl binary format): ", file_path)
 		return parse_rbxl_binary_buffer(buffer, parent_node)
@@ -94,15 +93,14 @@ func parse_rbxl_binary_buffer(buffer: PackedByteArray, parent_node: Node3D) -> A
 	stream.data_array = buffer
 	stream.big_endian = false
 	
-	# Skip Header "<roblox!" (8 bytes) + Version (2 bytes) + num_classes (4 bytes) + num_instances (4 bytes) + reserved (8 bytes)
 	if stream.get_size() < 32:
 		return spawn_locations
 		
 	stream.seek(32)
 	
-	var instance_types: Dictionary = {} # type_id -> { "name": String, "ids": Array }
-	var all_instances: Dictionary = {}    # inst_id -> { "class": String, "props": {} }
-	var parents: Dictionary = {}          # inst_id -> parent_inst_id
+	var instance_types: Dictionary = {}
+	var all_instances: Dictionary = {}
+	var parents: Dictionary = {}
 	
 	# Read Chunks (INST, PROP, PRNT, END)
 	while stream.get_position() < stream.get_size() - 8:
@@ -114,14 +112,18 @@ func parse_rbxl_binary_buffer(buffer: PackedByteArray, parent_node: Node3D) -> A
 		if chunk_name.begins_with("END"):
 			break
 			
-		var chunk_bytes: PackedByteArray
+		var chunk_bytes: PackedByteArray = PackedByteArray()
 		if cmp_len > 0:
-			var compressed_bytes := stream.get_data(cmp_len)[1] as PackedByteArray
-			chunk_bytes = compressed_bytes.decompress(dec_len, FileAccess.COMPRESSION_FASTLZ)
-			if chunk_bytes.size() == 0:
-				chunk_bytes = compressed_bytes # Fallback raw
+			var res = stream.get_data(cmp_len)
+			if res.size() >= 2 and res[0] == OK:
+				var compressed_bytes: PackedByteArray = res[1]
+				chunk_bytes = compressed_bytes.decompress(dec_len, FileAccess.COMPRESSION_FASTLZ)
+				if chunk_bytes.size() == 0:
+					chunk_bytes = compressed_bytes
 		else:
-			chunk_bytes = stream.get_data(dec_len)[1] as PackedByteArray
+			var res = stream.get_data(dec_len)
+			if res.size() >= 2 and res[0] == OK:
+				chunk_bytes = res[1]
 
 		var chunk_stream := StreamPeerBuffer.new()
 		chunk_stream.data_array = chunk_bytes
@@ -142,7 +144,6 @@ func parse_rbxl_binary_buffer(buffer: PackedByteArray, parent_node: Node3D) -> A
 		if item_class in VALID_3D_CLASSES:
 			_instantiate_part_node(inst.get("props", {}), parent_node)
 
-	# If binary file was compressed with proprietary encryption, ensure Baseplate & Spawn fallback
 	if part_count == 0:
 		var baseplate_item := {
 			"class": "Part",
@@ -236,7 +237,6 @@ func _parse_chunk_prop(stream: StreamPeerBuffer, types: Dictionary, instances: D
 	if not types.has(type_id): return
 	var target_ids: Array = types[type_id]["ids"]
 	
-	# Parse property values stream
 	for id in target_ids:
 		if instances.has(id):
 			var props: Dictionary = instances[id]["props"]
