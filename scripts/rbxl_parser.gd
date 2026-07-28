@@ -164,21 +164,19 @@ func _openblox_load_item(item_node: XMLNode, parent_3d_node: Node3D) -> void:
 		"Shape": 1
 	}
 
-	var created_3d_parent: Node3D = parent_3d_node
-
 	for child in item_node.children:
 		if child.name == "Properties":
 			_parse_openblox_properties(child, props)
 			break
 
+	# In Roblox .rbxl/.rbxlx format, CFrame values are stored in absolute World Space.
+	# Always attach 3D parts to the main stage parent node to prevent recursive transform stacking.
 	if item_class in VALID_3D_CLASSES:
-		var instantiated := _instantiate_part_node(props, parent_3d_node)
-		if instantiated:
-			created_3d_parent = instantiated
+		_instantiate_part_node(props, parent_3d_node)
 
 	for child in item_node.children:
 		if child.name == "Item":
-			_openblox_load_item(child, created_3d_parent)
+			_openblox_load_item(child, parent_3d_node)
 
 func _parse_openblox_properties(properties_node: XMLNode, props: Dictionary) -> void:
 	for prop_node in properties_node.children:
@@ -459,7 +457,7 @@ func _parse_chunk_prop(stream: StreamPeerBuffer, types: Dictionary, instances: D
 					if stream.get_position() + 1 <= stream.get_size():
 						props["Shape"] = stream.get_8()
 
-## High-Performance Material & Collision Shared Instantiator
+## High-Performance Material & World-Space Spatial Instantiator
 func _instantiate_part_node(props: Dictionary, parent: Node3D) -> Node3D:
 	var item_class: String = props.get("class", "Part")
 	var size: Vector3 = props.get("Size", Vector3(4, 1.2, 2))
@@ -477,7 +475,6 @@ func _instantiate_part_node(props: Dictionary, parent: Node3D) -> Node3D:
 		var brick_color_id: int = props.get("BrickColor", 194)
 		color = BrickColorDB.get_color(brick_color_id)
 
-	# Shared Material Caching (reuses material resources across 15,000+ parts)
 	var mat_key := "%d_%d_%d_%.2f" % [int(color.r * 255), int(color.g * 255), int(color.b * 255), transparency]
 	var material: StandardMaterial3D
 	if material_cache.has(mat_key):
@@ -551,7 +548,6 @@ func _instantiate_part_node(props: Dictionary, parent: Node3D) -> Node3D:
 					box_shape.size = size
 					shape = box_shape
 
-	# For huge 15,000+ part maps: create lightweight MeshInstance3D nodes directly if non-collidable
 	var target_parent_node: Node3D = parent
 	var instantiated_node: Node3D = null
 
