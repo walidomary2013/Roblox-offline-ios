@@ -126,19 +126,50 @@ func _create_block(part_name: String, size: Vector3, color: Color) -> MeshInstan
 
 	return mi
 
-func _create_head(part_name: String, size: Vector3, color: Color) -> MeshInstance3D:
-	var mi := MeshInstance3D.new()
-	mi.name = part_name
+func attach_jetpack_mesh() -> void:
+	if not torso_mesh: return
+	if torso_mesh.has_node("JetpackMesh"): return
 
-	# Roblox head is a rounded cylinder/cube
-	var sphere := SphereMesh.new()
-	sphere.radius = size.x * 0.5
-	sphere.height = size.y
-	mi.mesh = sphere
+	var jetpack := MeshInstance3D.new()
+	jetpack.name = "JetpackMesh"
+	
+	# Create Jetpack dual thruster barrels mesh
+	var box := BoxMesh.new()
+	box.size = Vector3(0.8, 1.2, 0.4)
+	jetpack.mesh = box
 
 	var mat := StandardMaterial3D.new()
-	mat.albedo_color = color
-	mat.roughness = 0.4
-	mi.material_override = mat
+	mat.albedo_color = Color(0.2, 0.2, 0.2) # Dark metallic grey
+	mat.metallic = 0.8
+	mat.roughness = 0.3
+	jetpack.material_override = mat
 
-	return mi
+	# Attach to back of torso
+	jetpack.position = Vector3(0, 0, -0.45)
+	torso_mesh.add_child(jetpack)
+
+	# Left thruster flame nozzle
+	var flame1 := MeshInstance3D.new()
+	var cyl := CylinderMesh.new()
+	cyl.top_radius = 0.15
+	cyl.bottom_radius = 0.0
+	cyl.height = 0.4
+	flame1.mesh = cyl
+
+	var flame_mat := StandardMaterial3D.new()
+	flame_mat.albedo_color = Color(1.0, 0.5, 0.0) # Bright orange jet flame
+	flame_mat.emission_enabled = true
+	flame_mat.emission = Color(1.0, 0.6, 0.1)
+	flame_mat.emission_energy_multiplier = 3.0
+	flame1.material_override = flame_mat
+
+	flame1.position = Vector3(-0.25, -0.7, 0)
+	jetpack.add_child(flame1)
+
+	# Right thruster flame nozzle
+	var flame2 = flame1.duplicate()
+	flame2.position = Vector3(0.25, -0.7, 0)
+	jetpack.add_child(flame2)
+
+	print("[R6Character] Jetpack 3D mesh attached to player back!")
+
