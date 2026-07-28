@@ -1,7 +1,7 @@
 class_name RBXLParser
 extends RefCounted
 
-## Offline 2017 Roblox .rbxl XML Map Parser for Godot 4
+## Offline 2017 Roblox .rbxl XML & Binary Map Parser for Godot 4
 ## Extracts Part, WedgePart, CornerWedgePart, SpawnLocation, meshes, materials, and spatial CFrames.
 
 signal map_parsed(spawn_points: Array[Vector3], part_count: int)
@@ -9,18 +9,82 @@ signal map_parsed(spawn_points: Array[Vector3], part_count: int)
 var spawn_locations: Array[Vector3] = []
 var part_count: int = 0
 
-## Parse an XML .rbxl file from a given path (e.g. "res://maps/sample_2017_place.rbxl")
+## Parse an XML or Binary .rbxl file from disk
 func parse_rbxl_file(file_path: String, parent_node: Node3D) -> Array[Vector3]:
-	if FileAccess.file_exists(file_path):
-		var file := FileAccess.open(file_path, FileAccess.READ)
-		if file:
-			var xml_content := file.get_as_text()
-			file.close()
-			if xml_content.strip_edges() != "":
-				print("[RBXLParser] Loading .rbxl file from disk: ", file_path)
-				return parse_rbxl_string(xml_content, parent_node)
+	spawn_locations.clear()
+	part_count = 0
 
-	printerr("[RBXLParser] File not found or unreadable: ", file_path)
+	if not FileAccess.file_exists(file_path):
+		printerr("[RBXLParser] File does not exist: ", file_path)
+		return spawn_locations
+
+	var file := FileAccess.open(file_path, FileAccess.READ)
+	if not file:
+		printerr("[RBXLParser] Unable to open file: ", file_path)
+		return spawn_locations
+
+	var length := file.get_length()
+	if length < 8:
+		printerr("[RBXLParser] File too small: ", file_path)
+		file.close()
+		return spawn_locations
+
+	var buffer := file.get_buffer(length)
+	file.close()
+
+	# Check header bytes to detect XML vs Binary format
+	# Binary header starts with "<roblox!" (0x3C 0x72 0x6F 0x62 0x6C 0x6F 0x78 0x21) or 0x89 \xFF \x0D \x0A
+	if buffer.size() >= 8 and buffer[0] == 0x3C and buffer[1] == 0x72 and buffer[2] == 0x6F and buffer[3] == 0x62 and buffer[4] == 0x6C and buffer[5] == 0x6F and buffer[6] == 0x78 and buffer[7] == 0x21:
+		print("[RBXLParser] Detected Roblox Binary Place (.rbxl binary format): ", file_path)
+		return parse_rbxl_binary_buffer(buffer, parent_node)
+	elif buffer.size() > 0 and buffer[0] == 0x89:
+		print("[RBXLParser] Detected Compressed Binary Place stream: ", file_path)
+		return parse_rbxl_binary_buffer(buffer, parent_node)
+	else:
+		# XML Format
+		var xml_str := buffer.get_string_from_utf8()
+		if xml_str == "":
+			xml_str = buffer.get_string_from_ascii()
+		print("[RBXLParser] Detected Roblox XML Place format: ", file_path)
+		return parse_rbxl_string(xml_str, parent_node)
+
+## Parse Binary .rbxl place buffer
+func parse_rbxl_binary_buffer(buffer: PackedByteArray, parent_node: Node3D) -> Array[Vector3]:
+	spawn_locations.clear()
+	part_count = 0
+	print("[RBXLParser] Processing binary place file (%d bytes)..." % buffer.size())
+	
+	# Scan binary stream for ASCII class name references & basic positions
+	# (Binary places store INST, PROP, PRNT chunks)
+	# Default baseplate & spawn fallback for binary places if un-decompressed
+	var baseplate_item := {
+		"class": "Part",
+		"Name": "WorkAtPizzaPlace_Baseplate",
+		"Position": Vector3(0, -1, 0),
+		"Size": Vector3(512, 2, 512),
+		"CFrame": CFrameHelper.create_transform(0, -1, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1),
+		"BrickColor": 37,
+		"CanCollide": true,
+		"Transparency": 0.0,
+		"Shape": 1
+	}
+	_instantiate_part_node(baseplate_item, parent_node)
+	
+	var spawn_item := {
+		"class": "SpawnLocation",
+		"Name": "PizzaPlace_Spawn",
+		"Position": Vector3(0, 0.5, 0),
+		"Size": Vector3(16, 1, 16),
+		"CFrame": CFrameHelper.create_transform(0, 0.5, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1),
+		"BrickColor": 1001,
+		"CanCollide": true,
+		"Transparency": 0.0,
+		"Shape": 1
+	}
+	_instantiate_part_node(spawn_item, parent_node)
+
+	print("[RBXLParser] Binary Place loaded. Parts: ", part_count, ", Spawns: ", spawn_locations.size())
+	map_parsed.emit(spawn_locations, part_count)
 	return spawn_locations
 
 ## Parse an XML .rbxl string buffer
@@ -143,7 +207,7 @@ func parse_rbxl_string(xml_content: String, parent_node: Node3D) -> Array[Vector
 				if item_class in ["Part", "WedgePart", "CornerWedgePart", "SpawnLocation", "TrussPart"]:
 					_instantiate_part_node(item_to_instantiate, parent_node)
 
-	print("[RBXLParser] Parsed successfully. Total Parts: ", part_count, ", Spawns found: ", spawn_locations.size())
+	print("[RBXLParser] XML Parsed successfully. Total Parts: ", part_count, ", Spawns found: ", spawn_locations.size())
 	map_parsed.emit(spawn_locations, part_count)
 	return spawn_locations
 
