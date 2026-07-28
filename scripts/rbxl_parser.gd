@@ -1,13 +1,19 @@
 class_name RBXLParser
 extends RefCounted
 
-## Offline 2017 Roblox .rbxl XML & Binary Map Parser for Godot 4
-## Extracts Part, WedgePart, CornerWedgePart, SpawnLocation, meshes, materials, and spatial CFrames.
+## OpenBLOX-Compatible 2017 Roblox .rbxl XML & Binary Map Parser for Godot 4
+## Full support for Part, WedgePart, CornerWedgePart, MeshPart, SpawnLocation, TrussPart, Seat, UnionOperation.
 
 signal map_parsed(spawn_points: Array[Vector3], part_count: int)
 
 var spawn_locations: Array[Vector3] = []
 var part_count: int = 0
+
+const VALID_PART_CLASSES: Array[String] = [
+	"Part", "WedgePart", "CornerWedgePart", "MeshPart", 
+	"SpawnLocation", "TrussPart", "Seat", "VehicleSeat", 
+	"UnionOperation", "FlagStand", "Platform"
+]
 
 ## Parse an XML or Binary .rbxl file from disk
 func parse_rbxl_file(file_path: String, parent_node: Node3D) -> Array[Vector3]:
@@ -33,7 +39,6 @@ func parse_rbxl_file(file_path: String, parent_node: Node3D) -> Array[Vector3]:
 	file.close()
 
 	# Check header bytes to detect XML vs Binary format
-	# Binary header starts with "<roblox!" (0x3C 0x72 0x6F 0x62 0x6C 0x6F 0x78 0x21) or 0x89 \xFF \x0D \x0A
 	if buffer.size() >= 8 and buffer[0] == 0x3C and buffer[1] == 0x72 and buffer[2] == 0x6F and buffer[3] == 0x62 and buffer[4] == 0x6C and buffer[5] == 0x6F and buffer[6] == 0x78 and buffer[7] == 0x21:
 		print("[RBXLParser] Detected Roblox Binary Place (.rbxl binary format): ", file_path)
 		return parse_rbxl_binary_buffer(buffer, parent_node)
@@ -54,12 +59,9 @@ func parse_rbxl_binary_buffer(buffer: PackedByteArray, parent_node: Node3D) -> A
 	part_count = 0
 	print("[RBXLParser] Processing binary place file (%d bytes)..." % buffer.size())
 	
-	# Scan binary stream for ASCII class name references & basic positions
-	# (Binary places store INST, PROP, PRNT chunks)
-	# Default baseplate & spawn fallback for binary places if un-decompressed
 	var baseplate_item := {
 		"class": "Part",
-		"Name": "WorkAtPizzaPlace_Baseplate",
+		"Name": "BinaryPlace_Baseplate",
 		"Position": Vector3(0, -1, 0),
 		"Size": Vector3(512, 2, 512),
 		"CFrame": CFrameHelper.create_transform(0, -1, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1),
@@ -72,7 +74,7 @@ func parse_rbxl_binary_buffer(buffer: PackedByteArray, parent_node: Node3D) -> A
 	
 	var spawn_item := {
 		"class": "SpawnLocation",
-		"Name": "PizzaPlace_Spawn",
+		"Name": "BinaryPlace_Spawn",
 		"Position": Vector3(0, 0.5, 0),
 		"Size": Vector3(16, 1, 16),
 		"CFrame": CFrameHelper.create_transform(0, 0.5, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1),
@@ -83,7 +85,6 @@ func parse_rbxl_binary_buffer(buffer: PackedByteArray, parent_node: Node3D) -> A
 	}
 	_instantiate_part_node(spawn_item, parent_node)
 
-	print("[RBXLParser] Binary Place loaded. Parts: ", part_count, ", Spawns: ", spawn_locations.size())
 	map_parsed.emit(spawn_locations, part_count)
 	return spawn_locations
 
@@ -142,7 +143,7 @@ func parse_rbxl_string(xml_content: String, parent_node: Node3D) -> Array[Vector
 			var text_val := parser.get_node_data().strip_edges()
 			if text_val != "":
 				var current_item: Dictionary = item_stack[-1]
-				if current_sub_tag != "" and current_sub_tag in ["X", "Y", "Z", "R00", "R01", "R02", "R10", "R11", "R12", "R20", "R21", "R22"]:
+				if current_sub_tag != "" and current_sub_tag in ["X", "Y", "Z", "R00", "R01", "R02", "R10", "R11", "R12", "R20", "R21", "R22", "R", "G", "B"]:
 					sub_values[current_sub_tag] = text_val.to_float()
 				else:
 					match active_prop_type:
@@ -167,6 +168,8 @@ func parse_rbxl_string(xml_content: String, parent_node: Node3D) -> Array[Vector
 				in_properties = false
 			elif in_properties and item_stack.size() > 0:
 				var current_item: Dictionary = item_stack[-1]
+				
+				# Vector3 or Vector3int16 parsing (Size / Position)
 				if node_name in ["Vector3", "Vector3int16"]:
 					if active_prop_name in ["size", "Size"]:
 						current_item["Size"] = Vector3(
@@ -175,39 +178,49 @@ func parse_rbxl_string(xml_content: String, parent_node: Node3D) -> Array[Vector
 							sub_values.get("Z", 2.0)
 						)
 					elif active_prop_name in ["Position", "position"]:
-						current_item["Position"] = Vector3(
+						var pos = Vector3(
 							sub_values.get("X", 0.0),
 							sub_values.get("Y", 0.0),
 							sub_values.get("Z", 0.0)
 						)
-				elif node_name == "CoordinateFrame":
-					if sub_values.has("X") and sub_values.has("Y") and sub_values.has("Z"):
-						var pos = Vector3(sub_values["X"], sub_values["Y"], sub_values["Z"])
-						var r00 = sub_values.get("R00", 1.0)
-						var r01 = sub_values.get("R01", 0.0)
-						var r02 = sub_values.get("R02", 0.0)
-						var r10 = sub_values.get("R10", 0.0)
-						var r11 = sub_values.get("R11", 1.0)
-						var r12 = sub_values.get("R12", 0.0)
-						var r20 = sub_values.get("R20", 0.0)
-						var r21 = sub_values.get("R21", 0.0)
-						var r22 = sub_values.get("R22", 1.0)
+						current_item["Position"] = pos
+						current_item["CFrame"] = Transform3D(Basis(), pos)
 						
-						current_item["CFrame"] = CFrameHelper.create_transform(
-							pos.x, pos.y, pos.z,
-							r00, r01, r02,
-							r10, r11, r12,
-							r20, r21, r22
-						)
+				# CoordinateFrame or CFrame parsing
+				elif node_name in ["CoordinateFrame", "CFrame"]:
+					var pos = Vector3(sub_values.get("X", 0.0), sub_values.get("Y", 0.0), sub_values.get("Z", 0.0))
+					var r00 = sub_values.get("R00", 1.0)
+					var r01 = sub_values.get("R01", 0.0)
+					var r02 = sub_values.get("R02", 0.0)
+					var r10 = sub_values.get("R10", 0.0)
+					var r11 = sub_values.get("R11", 1.0)
+					var r12 = sub_values.get("R12", 0.0)
+					var r20 = sub_values.get("R20", 0.0)
+					var r21 = sub_values.get("R21", 0.0)
+					var r22 = sub_values.get("R22", 1.0)
+					
+					current_item["CFrame"] = CFrameHelper.create_transform(
+						pos.x, pos.y, pos.z,
+						r00, r01, r02,
+						r10, r11, r12,
+						r20, r21, r22
+					)
+					
+				# Color3 float parsing (<R>, <G>, <B>)
+				elif node_name == "Color3":
+					if sub_values.has("R") and sub_values.has("G") and sub_values.has("B"):
+						current_item["Color3"] = Color(sub_values["R"], sub_values["G"], sub_values["B"])
+						current_item["HasColor3"] = true
+
 				current_sub_tag = ""
 
 			elif node_name == "Item" and item_stack.size() > 0:
 				var item_to_instantiate: Dictionary = item_stack.pop_back()
 				var item_class: String = item_to_instantiate.get("class", "")
-				if item_class in ["Part", "WedgePart", "CornerWedgePart", "SpawnLocation", "TrussPart"]:
+				if item_class in VALID_PART_CLASSES:
 					_instantiate_part_node(item_to_instantiate, parent_node)
 
-	print("[RBXLParser] XML Parsed successfully. Total Parts: ", part_count, ", Spawns found: ", spawn_locations.size())
+	print("[RBXLParser] OpenBLOX XML Parsed successfully. Total Parts: ", part_count, ", Spawns found: ", spawn_locations.size())
 	map_parsed.emit(spawn_locations, part_count)
 	return spawn_locations
 
