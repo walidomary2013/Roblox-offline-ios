@@ -2,19 +2,17 @@ extends Node3D
 
 ## Main Stage Manager for Roblox 2017 Map Viewer
 
-const RBXLParserClass = preload("res://scripts/rbxl_parser.gd")
-
 @export var map_path: String = "res://maps/crossroads_2017.rbxl"
 
 @onready var map_root: Node3D = $MapRoot
-@onready var player: Node3D = $PlayerCharacter
-@onready var joystick_hud: Control = $CanvasLayer/VirtualJoystick
+@onready var player: PlayerController = $PlayerCharacter
+@onready var joystick_hud: VirtualJoystickHUD = $CanvasLayer/VirtualJoystick
 @onready var status_label: Label = $CanvasLayer/DebugPanel/VBoxContainer/StatusLabel
 @onready var map_option_button: OptionButton = $CanvasLayer/DebugPanel/VBoxContainer/HBoxContainer/MapOptionButton
 @onready var load_file_button: Button = $CanvasLayer/DebugPanel/VBoxContainer/HBoxContainer/LoadFileButton
 @onready var file_dialog: FileDialog = $CanvasLayer/FileDialog
 
-var parser: RefCounted
+var parser: RBXLParser
 
 const MAP_PRESETS: Array[Dictionary] = [
 	{"name": "Classic Crossroads (2017)", "path": "res://maps/crossroads_2017.rbxl"},
@@ -22,7 +20,7 @@ const MAP_PRESETS: Array[Dictionary] = [
 ]
 
 func _ready() -> void:
-	parser = RBXLParserClass.new()
+	parser = RBXLParser.new()
 	
 	# Setup Map Selection OptionButton UI
 	if map_option_button:
@@ -71,11 +69,10 @@ func load_map(path: String) -> void:
 	# Position player character
 	if player:
 		player.global_position = target_spawn
-		if "velocity" in player:
-			player.velocity = Vector3.ZERO
+		player.velocity = Vector3.ZERO
 		
 	# Hook HUD touch controls to player
-	if joystick_hud and player and joystick_hud.has_method("set_player"):
+	if joystick_hud and player:
 		joystick_hud.set_player(player)
 
 	if status_label:
