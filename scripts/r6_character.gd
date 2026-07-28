@@ -126,6 +126,23 @@ func _create_block(part_name: String, size: Vector3, color: Color) -> MeshInstan
 
 	return mi
 
+func _create_head(part_name: String, size: Vector3, color: Color) -> MeshInstance3D:
+	var mi := MeshInstance3D.new()
+	mi.name = part_name
+
+	var sphere := SphereMesh.new()
+	sphere.radius = size.x * 0.5
+	sphere.height = size.y
+	mi.mesh = sphere
+
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = color
+	mat.roughness = 0.4
+	mi.material_override = mat
+
+	return mi
+
+
 func attach_jetpack_mesh() -> void:
 	if not torso_mesh: return
 	if torso_mesh.has_node("JetpackMesh"): return

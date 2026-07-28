@@ -180,14 +180,25 @@ func _openblox_load_item(item_node: XMLNode, parent_3d_node: Node3D) -> void:
 			_parse_openblox_properties(child, props)
 			break
 
-	# In Roblox .rbxl/.rbxlx format, CFrame values are stored in absolute World Space.
-	# Always attach 3D parts to the main stage parent node to prevent recursive transform stacking.
+	if item_class in ["Script", "LocalScript"]:
+		var script_source := ""
+		for child in item_node.children:
+			if child.name == "Properties":
+				for prop in child.children:
+					if prop.attributes.get("name", "") == "Source":
+						script_source = prop.content
+						break
+		if script_source != "":
+			var vm := LuauVM.new(parent_3d_node)
+			vm.run_script(props.get("Name", item_class), script_source, parent_3d_node)
+
 	if item_class in VALID_3D_CLASSES:
 		_instantiate_part_node(props, parent_3d_node)
 
 	for child in item_node.children:
 		if child.name == "Item":
 			_openblox_load_item(child, parent_3d_node)
+
 
 func _parse_openblox_properties(properties_node: XMLNode, props: Dictionary) -> void:
 	for prop_node in properties_node.children:
