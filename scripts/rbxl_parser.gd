@@ -11,6 +11,7 @@ const RobloxEnvScript = preload("res://scripts/roblox_environment.gd")
 var spawn_locations: Array[Vector3] = []
 var part_count: int = 0
 var material_cache: Dictionary = {}
+var shared_vm: LuauVM = null
 
 const VALID_3D_CLASSES: Array[String] = [
 	"Part", "WedgePart", "CornerWedgePart", "MeshPart", 
@@ -56,6 +57,7 @@ func parse_rbxl_file(file_path: String, parent_node: Node3D) -> Array[Vector3]:
 	spawn_locations.clear()
 	part_count = 0
 	material_cache.clear()
+	shared_vm = LuauVM.new(parent_node)
 
 	if not FileAccess.file_exists(file_path):
 		printerr("[RBXLParser] File does not exist: ", file_path)
@@ -196,17 +198,9 @@ func _openblox_load_item(item_node: XMLNode, parent_3d_node: Node3D) -> void:
 					if pname in ["Source", "ProtectedString", "ScriptText", "SourceCode"]:
 						script_source = prop.content
 						break
-		if script_source != "":
-			# Unescape Roblox XML HTML entities
-			script_source = script_source.replace("&apos;", "'")
-			script_source = script_source.replace("&quot;", '"')
-			script_source = script_source.replace("&lt;", "<")
-			script_source = script_source.replace("&gt;", ">")
-			script_source = script_source.replace("&amp;", "&")
-			
-			var vm := LuauVM.new(parent_3d_node)
-			vm.run_script(props.get("Name", item_class), script_source, parent_3d_node)
-
+		if script_source != "" and shared_vm:
+			script_source = script_source.replace("&apos;", "'").replace("&quot;", '"').replace("&lt;", "<").replace("&gt;", ">").replace("&amp;", "&")
+			shared_vm.run_script(props.get("Name", item_class), script_source, parent_3d_node)
 
 	if item_class in VALID_3D_CLASSES:
 		_instantiate_part_node(props, parent_3d_node)
