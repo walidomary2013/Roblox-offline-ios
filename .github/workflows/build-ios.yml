@@ -1,123 +1,43 @@
-name: Build iOS App (JIT Enabled)
+name: Build Native Novetus iOS App (.ipa)
 
 on:
   push:
-    branches: [ "main", "master" ]
+    branches: [ main ]
   pull_request:
-    branches: [ "main", "master" ]
+    branches: [ main ]
   workflow_dispatch:
 
 jobs:
-  build-ios:
-    name: Export & Package iOS IPA
-    runs-on: macos-latest
-
-    env:
-      GODOT_VERSION: "4.3"
-      GODOT_RELEASE: "stable"
-
+  build-ios-native:
+    runs-on: macos-14
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
-
-      - name: Cache Godot Engine & Export Templates
-        id: cache-godot
-        uses: actions/cache@v4
         with:
-          path: |
-            ~/godot/
-            ~/Library/Application Support/Godot/
-          key: godot-${{ env.GODOT_VERSION }}-${{ runner.os }}
+          submodules: recursive
 
-      - name: Install Godot Engine & iOS Export Templates
+      - name: Select Xcode Version
+        run: sudo xcode-select -s /Applications/Xcode_15.4.app/Contents/Developer
+
+      - name: Build Native Swift/Obj-C Novetus iOS App
         run: |
-          mkdir -p ~/godot
-          mkdir -p "$HOME/Library/Application Support/Godot/export_templates/${GODOT_VERSION}.${GODOT_RELEASE}"
+          xcodebuild -project Novetus_iOS/Novetus_iOS.xcodeproj \
+                     -scheme Novetus_iOS \
+                     -sdk iphoneos \
+                     -configuration Release \
+                     -derivedDataPath build \
+                     CODE_SIGNING_ALLOWED=NO \
+                     CODE_SIGN_IDENTITY="" \
+                     CODE_SIGNING_REQUIRED=NO
 
-          # Download Godot Engine 4.3 MacOS Editor
-          if [ ! -f ~/godot/Godot.app/Contents/MacOS/Godot ]; then
-            echo "Downloading Godot Engine v${GODOT_VERSION}..."
-            curl -L -o ~/godot/godot.zip "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-${GODOT_RELEASE}/Godot_v${GODOT_VERSION}-${GODOT_RELEASE}_macos.universal.zip"
-            unzip -q ~/godot/godot.zip -d ~/godot/
-            rm ~/godot/godot.zip
-          fi
-
-          # Download iOS Export Templates
-          TEMPLATES_DIR="$HOME/Library/Application Support/Godot/export_templates/${GODOT_VERSION}.${GODOT_RELEASE}"
-          if [ ! -f "$TEMPLATES_DIR/ios.zip" ]; then
-            echo "Downloading Godot Export Templates..."
-            curl -L -o ~/godot/templates.tpz "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-${GODOT_RELEASE}/Godot_v${GODOT_VERSION}-${GODOT_RELEASE}_export_templates.tpz"
-            unzip -q ~/godot/templates.tpz -d ~/godot/templates/
-            mv ~/godot/templates/templates/* "$TEMPLATES_DIR/"
-            rm -rf ~/godot/templates ~/godot/templates.tpz
-          fi
-
-          echo "Godot binary path: ~/godot/Godot.app/Contents/MacOS/Godot"
-          ~/godot/Godot.app/Contents/MacOS/Godot --version
-
-      - name: Create Build Directories
-        run: |
-          mkdir -p build/ios
-
-      - name: Export Xcode Project from Godot
-        run: |
-          ~/godot/Godot.app/Contents/MacOS/Godot --headless --export-release "iOS" build/ios/RobloxViewer.xcodeproj || true
-
-      - name: Inject JIT Entitlements & Disable Code Signing in Xcode Project
-        run: |
-          cp Entitlements.plist build/ios/Entitlements.plist
-          
-          PBXPROJ="build/ios/RobloxViewer.xcodeproj/project.pbxproj"
-          if [ -f "$PBXPROJ" ]; then
-            echo "Patching Xcode project settings for unsigned build with JIT entitlements..."
-            sed -i '' 's/CODE_SIGN_STYLE = Automatic;/CODE_SIGN_STYLE = Manual;/g' "$PBXPROJ"
-            sed -i '' 's/CODE_SIGN_IDENTITY = "iPhone Distribution";/CODE_SIGN_IDENTITY = "";/g' "$PBXPROJ"
-            sed -i '' 's/CODE_SIGN_IDENTITY\[sdk=iphoneos\*\] = "iPhone Distribution";/CODE_SIGN_IDENTITY[sdk=iphoneos*] = "";/g' "$PBXPROJ"
-            sed -i '' 's/CODE_SIGN_IDENTITY\[sdk=iphoneos\*\] = "iPhone Developer";/CODE_SIGN_IDENTITY[sdk=iphoneos*] = "";/g' "$PBXPROJ"
-            sed -i '' 's/CODE_SIGN_ENTITLEMENTS = "";/CODE_SIGN_ENTITLEMENTS = Entitlements.plist;/g' "$PBXPROJ"
-            sed -i '' 's/PROVISIONING_PROFILE_SPECIFIER = "";/PROVISIONING_PROFILE_SPECIFIER = "";/g' "$PBXPROJ"
-            echo "Successfully patched project.pbxproj."
-          fi
-
-      - name: Compile Unsigned iOS Binary with xcodebuild
-        run: |
-          cd build/ios
-          xcodebuild clean build \
-            -project RobloxViewer.xcodeproj \
-            -scheme RobloxViewer \
-            -sdk iphoneos \
-            -configuration Release \
-            CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGN_IDENTITY="" \
-            CODE_SIGN_STYLE="Manual" \
-            PROVISIONING_PROFILE_SPECIFIER="" \
-            DEVELOPMENT_TEAM="" \
-            BUILD_DIR=../output
-
-      - name: Package Unsigned .ipa Artifact (AltStore / SideStore Ready)
+      - name: Package Native Novetus iOS IPA
         run: |
           mkdir -p Payload
-          
-          # Find exported .app bundle inside build output
-          APP_PATH=$(find build/output -name "*.app" | head -n 1)
-          if [ -z "$APP_PATH" ]; then
-            echo "Error: Could not locate compiled .app directory!"
-            exit 1
-          fi
+          cp -r build/Build/Products/Release-iphoneos/Novetus_iOS.app Payload/
+          zip -r Novetus_iOS_Native.ipa Payload
 
-          echo "Found app bundle at: $APP_PATH"
-          cp -R "$APP_PATH" Payload/
-
-          # Copy Entitlements into app bundle for sideloaders
-          cp Entitlements.plist Payload/*.app/
-
-          # Zip Payload into unsigned .ipa file
-          zip -r RobloxViewer_2017_JIT.ipa Payload
-
-      - name: Upload IPA Artifact
+      - name: Upload Native Novetus IPA Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: RobloxViewer-2017-iOS-JIT
-          path: RobloxViewer_2017_JIT.ipa
-          retention-days: 14
+          name: Novetus_iOS_Native_IPA
+          path: Novetus_iOS_Native.ipa
