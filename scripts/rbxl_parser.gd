@@ -175,7 +175,7 @@ func _parse_chunk_inst(stream: StreamPeerBuffer, types: Dictionary, instances: D
 	if stream.get_size() < 8: return
 	var type_id := stream.get_32()
 	var class_name_len := stream.get_32()
-	var class_name := stream.get_string(class_name_len)
+	var target_class_name := stream.get_string(class_name_len)
 	var is_service := stream.get_8()
 	var inst_count := stream.get_32()
 	
@@ -187,10 +187,10 @@ func _parse_chunk_inst(stream: StreamPeerBuffer, types: Dictionary, instances: D
 		prev_id += val
 		inst_ids.append(prev_id)
 		instances[prev_id] = {
-			"class": class_name,
+			"class": target_class_name,
 			"props": {
-				"class": class_name,
-				"Name": class_name,
+				"class": target_class_name,
+				"Name": target_class_name,
 				"Position": Vector3.ZERO,
 				"Size": Vector3(4, 1.2, 2),
 				"CFrame": Transform3D.IDENTITY,
@@ -201,7 +201,7 @@ func _parse_chunk_inst(stream: StreamPeerBuffer, types: Dictionary, instances: D
 			}
 		}
 
-	types[type_id] = { "name": class_name, "ids": inst_ids }
+	types[type_id] = { "name": target_class_name, "ids": inst_ids }
 
 func _parse_chunk_prnt(stream: StreamPeerBuffer, parents: Dictionary) -> void:
 	if stream.get_size() < 5: return
