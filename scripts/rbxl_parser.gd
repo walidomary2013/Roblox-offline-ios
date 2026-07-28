@@ -148,8 +148,19 @@ func parse_rbxl_string(xml_content: String, parent_node: Node3D) -> Array[Vector
 	map_parsed.emit(spawn_locations, part_count)
 	return spawn_locations
 
+const IGNORED_STORAGE_SERVICES: Array[String] = [
+	"ServerStorage", "ReplicatedStorage", "StarterPack", 
+	"StarterGui", "Lighting", "ServerScriptService", 
+	"SoundService", "JointsService", "TestService"
+]
+
 func _openblox_load_item(item_node: XMLNode, parent_3d_node: Node3D) -> void:
 	var item_class: String = item_node.attributes.get("class", "Part")
+	
+	# Skip non-rendered storage services (ServerStorage, ReplicatedStorage, etc.)
+	if item_class in IGNORED_STORAGE_SERVICES:
+		return
+
 	var props := {
 		"class": item_class,
 		"Name": item_class,
