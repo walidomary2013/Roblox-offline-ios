@@ -1,0 +1,115 @@
+name: Build iOS App (JIT Enabled)
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+  workflow_dispatch:
+
+jobs:
+  build-ios:
+    name: Export & Package iOS IPA
+    runs-on: macos-latest
+
+    env:
+      GODOT_VERSION: "4.3"
+      GODOT_RELEASE: "stable"
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Cache Godot Engine & Export Templates
+        id: cache-godot
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/godot/
+            ~/Library/Application Support/Godot/
+          key: godot-${{ env.GODOT_VERSION }}-${{ runner.os }}
+
+      - name: Install Godot Engine & iOS Export Templates
+        run: |
+          mkdir -p ~/godot
+          mkdir -p "$HOME/Library/Application Support/Godot/export_templates/${GODOT_VERSION}.${GODOT_RELEASE}"
+
+          # Download Godot Engine 4.3 MacOS Editor
+          if [ ! -f ~/godot/Godot.app/Contents/MacOS/Godot ]; then
+            echo "Downloading Godot Engine v${GODOT_VERSION}..."
+            curl -L -o ~/godot/godot.zip "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-${GODOT_RELEASE}/Godot_v${GODOT_VERSION}-${GODOT_RELEASE}_macos.universal.zip"
+            unzip -q ~/godot/godot.zip -d ~/godot/
+            rm ~/godot/godot.zip
+          fi
+
+          # Download iOS Export Templates
+          TEMPLATES_DIR="$HOME/Library/Application Support/Godot/export_templates/${GODOT_VERSION}.${GODOT_RELEASE}"
+          if [ ! -f "$TEMPLATES_DIR/ios.zip" ]; then
+            echo "Downloading Godot Export Templates..."
+            curl -L -o ~/godot/templates.tpz "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-${GODOT_RELEASE}/Godot_v${GODOT_VERSION}-${GODOT_RELEASE}_export_templates.tpz"
+            unzip -q ~/godot/templates.tpz -d ~/godot/templates/
+            mv ~/godot/templates/templates/* "$TEMPLATES_DIR/"
+            rm -rf ~/godot/templates ~/godot/templates.tpz
+          fi
+
+          echo "Godot binary path: ~/godot/Godot.app/Contents/MacOS/Godot"
+          ~/godot/Godot.app/Contents/MacOS/Godot --version
+
+      - name: Create Build Directories
+        run: |
+          mkdir -p build/ios
+
+      - name: Export Xcode Project from Godot
+        run: |
+          ~/godot/Godot.app/Contents/MacOS/Godot --headless --export-release "iOS" build/ios/RobloxViewer.xcodeproj
+
+      - name: Inject JIT Entitlements into Xcode Project
+        run: |
+          cp Entitlements.plist build/ios/Entitlements.plist
+          
+          # Patch project.pbxproj to ensure CODE_SIGN_ENTITLEMENTS points to Entitlements.plist
+          PBXPROJ="build/ios/RobloxViewer.xcodeproj/project.pbxproj"
+          if [ -f "$PBXPROJ" ]; then
+            sed -i '' 's/CODE_SIGN_ENTITLEMENTS = "";/CODE_SIGN_ENTITLEMENTS = Entitlements.plist;/g' "$PBXPROJ"
+            echo "Successfully injected JIT entitlements into Xcode project build settings."
+          fi
+
+      - name: Compile Unsigned iOS Binary with xcodebuild
+        run: |
+          cd build/ios
+          xcodebuild clean build \
+            -project RobloxViewer.xcodeproj \
+            -scheme RobloxViewer \
+            -sdk iphoneos \
+            -configuration Release \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            BUILD_DIR=../output
+
+      - name: Package Unsigned .ipa Artifact (AltStore / SideStore Ready)
+        run: |
+          mkdir -p Payload
+          
+          # Find exported .app bundle inside build output
+          APP_PATH=$(find build/output -name "*.app" | head -n 1)
+          if [ -z "$APP_PATH" ]; then
+            echo "Error: Could not locate compiled .app directory!"
+            exit 1
+          fi
+
+          echo "Found app bundle at: $APP_PATH"
+          cp -R "$APP_PATH" Payload/
+
+          # Copy Entitlements into app bundle for sideloaders
+          cp Entitlements.plist Payload/*.app/
+
+          # Zip Payload into unsigned .ipa file
+          zip -r RobloxViewer_2017_JIT.ipa Payload
+
+      - name: Upload IPA Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: RobloxViewer-2017-iOS-JIT
+          path: RobloxViewer_2017_JIT.ipa
+          retention-days: 14

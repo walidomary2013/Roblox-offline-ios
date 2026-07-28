@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Enables task access / debugging capabilities required for JIT attachment -->
+	<key>get-task-allow</key>
+	<true/>
+
+	<!-- Key entitlement required by AltStore / SideStore to allocate executable memory (JIT) -->
+	<key>dynamic-codesigning</key>
+	<true/>
+
+	<!-- Allows extended virtual address space allocation (essential for high-performance 64-bit JIT engines) -->
+	<key>com.apple.developer.kernel.extended-virtual-addressing</key>
+	<true/>
+
+	<!-- Disable network sandbox restrictions for local socket IPC / debugging if needed -->
+	<key>com.apple.security.network.client</key>
+	<true/>
+</dict>
+</plist>
