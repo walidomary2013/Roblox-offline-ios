@@ -198,8 +198,8 @@ func _parse_openblox_properties(properties_node: XMLNode, props: Dictionary) -> 
 				props[prop_name] = (prop_node.content.to_lower() == "true")
 			"token":
 				props[prop_name] = prop_node.content.to_int()
-			"Color3uint":
-				props["Color3"] = BrickColorDB.parse_color3_uint(prop_node.content.to_int())
+			"Color3uint", "Color3uint8":
+				props["Color3"] = BrickColorDB.parse_color3_uint8(prop_node.content.to_int())
 				props["HasColor3"] = true
 			"Vector3", "Vector3int16":
 				var vec := Vector3.ZERO
